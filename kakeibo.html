@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>帳合 — 家計簿ビューア</title>
+<style>
+:root{
+  --paper: #F7F3EA;
+  --paper-dim: #EFE9DA;
+  --ink: #2B2620;
+  --ink-soft: #5C5448;
+  --red: #A8443A;
+  --red-soft: #C97B6F;
+  --green: #3D6657;
+  --green-soft: #6E9485;
+  --gold: #C9A85C;
+  --line: #D8CFBA;
+  --line-strong: #B8AC8E;
+  --white: #FFFDF8;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background: var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(43,38,32,0.025) 0px, rgba(43,38,32,0.025) 1px, transparent 1px, transparent 28px);
+  color: var(--ink);
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "游明朝", "ヒラギノ明朝 ProN W3", "MS PMincho", "Noto Serif JP", serif;
+  min-height: 100vh;
+}
+
+.font-ui{ font-family: "Hiragino Sans", "Yu Gothic", "YuGothic", "游ゴシック", "Meiryo", "MS PGothic", "Noto Sans JP", sans-serif; }
+.font-num{ font-family: "Roboto Mono", "SF Mono", "Consolas", "Yu Gothic", "Noto Sans JP", monospace; font-feature-settings: "tnum"; }
+
+/* ===== Layout shell ===== */
+.app{ max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
+
+/* ===== Header ===== */
+.masthead{
+  display:flex; align-items:baseline; justify-content:space-between;
+  border-bottom: 3px double var(--line-strong);
+  padding-bottom: 14px; margin-bottom: 28px;
+  flex-wrap: wrap; gap: 12px;
+}
+.masthead .title{
+  font-size: 28px; font-weight: 700; letter-spacing: 0.08em;
+}
+.masthead .title small{
+  display:block; font-family: "Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size: 11px; letter-spacing: 0.15em; color: var(--ink-soft); margin-top: 4px;
+}
+.masthead .actions{ display:flex; gap:8px; align-items:center; }
+
+/* ===== Buttons ===== */
+.btn{
+  font-family: inherit; font-size: 13px; letter-spacing:0.04em;
+  background: var(--white); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: 3px;
+  padding: 9px 16px; cursor:pointer; transition: all 0.15s ease;
+}
+.btn:hover{ background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn.primary{ background: var(--ink); color: var(--paper); }
+.btn.primary:hover{ background: var(--red); border-color: var(--red); }
+.btn:disabled{ opacity:0.35; cursor:not-allowed; }
+.btn:disabled:hover{ background:var(--white); color:var(--ink); border-color:var(--line-strong); }
+
+/* ===== Dropzone (initial state) ===== */
+.dropzone{
+  border: 2px dashed var(--line-strong);
+  border-radius: 6px;
+  padding: 64px 24px;
+  text-align: center;
+  background: rgba(255,253,248,0.5);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.dropzone.drag-over{ border-color: var(--red); background: rgba(168,68,58,0.06); }
+.dropzone .icon{ font-size: 36px; margin-bottom: 16px; color: var(--ink-soft); }
+.dropzone .main-text{ font-size: 17px; margin-bottom: 8px; }
+.dropzone .sub-text{ font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size: 12px; color: var(--ink-soft); letter-spacing:0.04em; }
+.dropzone input{ display:none; }
+
+#errorBox{
+  display:none; margin-top:16px; padding:14px 18px;
+  background: rgba(168,68,58,0.08); border-left:3px solid var(--red);
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:13px; color: var(--red);
+  border-radius: 2px; white-space:pre-line;
+}
+
+/* ===== Dashboard ===== */
+#dashboard{ display:none; }
+
+.month-banner{
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size: 12px; letter-spacing:0.1em; color: var(--ink-soft);
+  margin-bottom: 18px; display:flex; align-items:center; gap:10px;
+}
+.month-banner .pill{
+  background: var(--ink); color: var(--paper); padding: 3px 10px; border-radius: 2px;
+  font-size: 11px;
+}
+
+/* Ledger spread (summary cards) */
+.spread{
+  display:grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  border: 1px solid var(--line-strong); border-radius: 4px; overflow:hidden;
+  margin-bottom: 28px; background: var(--white);
+}
+.spread .cell{
+  padding: 20px 18px; border-right: 1px solid var(--line);
+  position:relative;
+}
+.spread .cell:last-child{ border-right:none; }
+.spread .cell .label{
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size: 11px;
+  letter-spacing:0.1em; color: var(--ink-soft); margin-bottom: 8px;
+}
+.spread .cell .value{
+  font-size: 26px; font-weight:700; line-height:1.1;
+}
+.spread .cell .value.font-num{ font-size:24px; }
+.spread .cell .value .yen{ font-size:14px; font-weight:400; margin-left:2px; }
+.spread .cell.income .value{ color: var(--green); }
+.spread .cell.expense .value{ color: var(--red); }
+.spread .cell.remain .value.negative{ color: var(--red); }
+.spread .cell.remain .value.positive{ color: var(--green); }
+.spread .cell .sub{
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size: 10px; color: var(--ink-soft); margin-top:6px;
+}
+
+@media (max-width: 760px){
+  .spread{ grid-template-columns: repeat(2,1fr); }
+  .spread .cell:nth-child(2){ border-right:none; }
+}
+
+/* Section headers */
+.section{ margin-bottom: 32px; }
+.section-head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  border-bottom: 1px solid var(--line-strong); padding-bottom: 8px; margin-bottom: 16px;
+}
+.section-head h2{
+  font-size: 16px; font-weight:700; margin:0; letter-spacing:0.05em;
+  display:flex; align-items:center; gap:8px;
+}
+.section-head h2::before{
+  content:''; display:inline-block; width:10px; height:10px; background: var(--gold); transform: rotate(45deg);
+}
+.section-head .note{
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:11px; color: var(--ink-soft);
+}
+
+.two-col{ display:grid; grid-template-columns: 1.3fr 1fr; gap: 28px; }
+@media (max-width: 860px){ .two-col{ grid-template-columns: 1fr; } }
+
+/* Calendar grid */
+.calendar{
+  display:grid; grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--line); border-radius:3px; overflow:hidden;
+}
+.calendar .dow{
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:10px; text-align:center;
+  padding:6px 0; background: var(--paper-dim); color: var(--ink-soft); letter-spacing:0.05em;
+  border-bottom:1px solid var(--line);
+}
+.calendar .cell{
+  min-height: 72px; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding: 6px 7px; position:relative; background: var(--white);
+}
+.calendar .cell.blank{ background: var(--paper-dim); }
+.calendar .cell .d{ font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:10px; color: var(--ink-soft); }
+.calendar .cell .amt{ font-size:14px; margin-top:14px; font-weight:600; }
+.calendar .cell.over .amt{ color: var(--red); }
+.calendar .cell.under .amt{ color: var(--ink); }
+.calendar .cell.over{ background: rgba(168,68,58,0.05); }
+.calendar .cell .flags{ position:absolute; top:5px; right:5px; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+.calendar .cell .flag{
+  font-size:9px; line-height:1; padding:1px 4px; border-radius:6px; white-space:nowrap;
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; cursor:help;
+}
+.calendar .cell .flag.mismatch-flag{ background: rgba(201,168,92,0.25); color:#8a6d2c; }
+.calendar .cell .flag.dup-flag{ background: rgba(139,123,168,0.2); color:#5c4f7a; }
+.calendar-legend{
+  display:flex; gap:18px; margin-top:10px; font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:10.5px; color: var(--ink-soft);
+  align-items:center; flex-wrap:wrap;
+}
+.calendar-legend .sw{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+
+/* Tag bars */
+.tagbar-row{ margin-bottom: 14px; }
+.tagbar-row .top{ display:flex; justify-content:space-between; font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:12px; margin-bottom:5px; }
+.tagbar-row .top .name{ font-weight:600; }
+.tagbar-row .top .amt{ color: var(--ink-soft); }
+.tagbar-track{ height:9px; background: var(--paper-dim); border-radius:5px; overflow:hidden; border:1px solid var(--line); }
+.tagbar-fill{ height:100%; border-radius:5px; }
+
+/* Ranking list */
+.ranklist{ list-style:none; margin:0; padding:0; }
+.ranklist li{
+  display:flex; align-items:center; gap:12px; padding:9px 0;
+  border-bottom: 1px solid var(--line);
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:13px;
+}
+.ranklist li:last-child{ border-bottom:none; }
+.ranklist .rank{
+  font-family: "Roboto Mono", monospace; font-size:11px; color: var(--gold); width:18px; flex-shrink:0; font-weight:700;
+}
+.ranklist .name{ flex:1; }
+.ranklist .amt{ font-weight:600; }
+
+/* Weekly chart */
+.weekchart{ display:flex; align-items:flex-end; gap:10px; height:160px; padding: 10px 4px 0; }
+.weekchart .bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; }
+.weekchart .bar{ width: 60%; background: var(--ink-soft); border-radius: 2px 2px 0 0; min-height:2px; position:relative; }
+.weekchart .bar.over-avg{ background: var(--red-soft); }
+.weekchart .bar-label{ font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:10px; color: var(--ink-soft); margin-top:6px; text-align:center; }
+.weekchart .bar-val{ font-family:"Roboto Mono",monospace; font-size:10px; color: var(--ink-soft); margin-top:3px; }
+
+/* Toggle */
+.toggle-group{ display:flex; gap:6px; }
+.toggle-group button{
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:11px; padding:5px 11px;
+  border:1px solid var(--line-strong); background:var(--white); color:var(--ink-soft); border-radius:3px; cursor:pointer;
+}
+.toggle-group button.active{ background: var(--ink); color: var(--paper); border-color:var(--ink); }
+
+/* Mismatch warning panel */
+.mismatch-panel{
+  margin-top: 10px; padding: 12px 16px; background: rgba(201,168,92,0.12);
+  border-left: 3px solid var(--gold); border-radius:2px;
+  font-family:"Hiragino Sans","Noto Sans JP",sans-serif; font-size:12px; color: var(--ink-soft);
+}
+.mismatch-panel ul{ margin: 6px 0 0; padding-left: 18px; }
+
+footer.app-footer{
+  text-align:center; margin-top:40px; font-family:"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:11px; color: var(--ink-soft); letter-spacing:0.05em;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="masthead">
+    <div class="title">帳合<small>KAKEIBO LEDGER VIEWER</small></div>
+    <div class="actions" id="headerActions" style="display:none;">
+      <button class="btn font-ui" id="reimportBtn">別のファイルを開く</button>
+      <button class="btn primary font-ui" id="exportBtn">サマリをmdで保存</button>
+    </div>
+  </div>
+
+  <div id="importScreen">
+    <div class="dropzone font-ui" id="dropzone">
+      <div class="icon">⎘</div>
+      <div class="main-text">家計簿の .md ファイルをドロップ、またはクリックして選択</div>
+      <div class="sub-text">1ヶ月分のファイル1つを読み込みます</div>
+      <input type="file" id="fileInput" accept=".md,.txt">
+    </div>
+    <div id="errorBox" class="font-ui"></div>
+  </div>
+
+  <div id="dashboard"></div>
+
+  <footer class="app-footer">記載のないデータは品目から自動集計しています</footer>
+</div>
+
+<script>
+/* =========================================================
+   1. PARSER
+   ========================================================= */
+
+// Normalize old long-form tags to the new short-form tags so the rest of
+// the app only ever has to deal with one canonical tag set.
+const TAG_NORMALIZE = {
+  '浪費': '浪', '家': '家', '年': '年', '特別費': '特', 'ポイント': 'ポ',
+  '浪': '浪', '特': '特', 'ポ': 'ポ',
+};
+const KNOWN_TAG_RAW = new Set(Object.keys(TAG_NORMALIZE));
+
+function extractTags(text) {
+  // Only treat 〔...〕 / 【...】 as a tag when its contents are one of the
+  // known tag words. This avoids false positives on bracketed text that is
+  // actually part of a product name (e.g. "【Celladix公式】グリシン...").
+  const tags = [];
+  const re = /[〔【]([^〕】]+)[〕】]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (KNOWN_TAG_RAW.has(m[1])) tags.push(TAG_NORMALIZE[m[1]]);
+  }
+  return tags;
+}
+function stripTags(text){
+  // Strip only recognized tag brackets, in the same way extractTags finds them,
+  // so an unrelated 【ブランド名】 in a product name is left intact.
+  return text.replace(/[〔【]([^〕】]+)[〕】]/g, (full, inner) => KNOWN_TAG_RAW.has(inner) ? '' : full).trim();
+}
+
+function parseAmountAndName(text){
+  // Amount is the trailing number in the string; a trailing "P" marks a
+  // points-amount in the OLD format only (new format uses 〔ポ〕 tag instead,
+  // but we still strip a trailing P defensively so it never leaks into the name).
+  const m = text.match(/(-?\d+)\s*P?\s*$/);
+  let amount = m ? parseInt(m[1], 10) : 0;
+  let name = m ? text.slice(0, m.index).trim() : text;
+  name = name.replace(/[　\s]+$/, '');
+  return { amount, name };
+}
+
+// ---- Format detection -------------------------------------------------
+// New format day header:    ### 2026/07/01：1620：●
+// Old format day header:    ## 2026/06/01：●2668
+function detectFormat(md){
+  if (/^###\s*\d{4}\/\d{2}\/\d{2}\s*[：:]/m.test(md)) return 'new';
+  return 'old';
+}
+
+function parseKakeibo(md) {
+  const format = detectFormat(md);
+  return format === 'new' ? parseNewFormat(md) : parseOldFormat(md);
+}
+
+// ---- NEW format parser --------------------------------------------------
+// Hierarchy is by heading depth (#), not indentation:
+//   # 月間 / # 日別
+//   ## 収入 / ## 固定費 / ## 合計 / ## MM/DD週
+//   ### YYYY/MM/DD：合計：mark
+//   #### 店名：店舗合計
+//   - 〔タグ〕品名　金額
+function parseNewFormat(md){
+  const lines = md.split('\n');
+  let income = 0;
+  let fixedCosts = [];
+  let days = [];
+  let monthLabel = null;
+
+  let topSection = null;   // '月間' | '日別'
+  let subSection = null;   // '収入' | '固定費' | '合計' | '週' | null
+  let currentDay = null;
+  let currentStore = null;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (trimmed === '') continue;
+
+    if (/^#\s+月間/.test(trimmed)) { topSection = '月間'; subSection = null; currentDay = null; currentStore = null; continue; }
+    if (/^#\s+日別/.test(trimmed)) { topSection = '日別'; subSection = null; currentDay = null; currentStore = null; continue; }
+
+    if (/^##\s+収入/.test(trimmed)) { subSection = '収入'; continue; }
+    if (/^##\s+固定費/.test(trimmed)) { subSection = '固定費'; continue; }
+    if (/^##\s+合計/.test(trimmed)) { subSection = '合計'; continue; }
+    if (/^##\s*\d+\/\d+週/.test(trimmed)) { subSection = '週'; currentDay = null; currentStore = null; continue; }
+
+    if (subSection === '合計') continue; // ignore dataviewjs block entirely
+
+    if (topSection === '月間' && subSection === '収入' && /^[-*]\s*\d+/.test(trimmed)) {
+      income += parseInt(trimmed.replace(/[^\d]/g, ''), 10);
+      continue;
+    }
+    if (topSection === '月間' && subSection === '固定費' && /^[-*]\s*[^：:]+[：:]\s*\d+/.test(trimmed)) {
+      const m = trimmed.match(/^[-*]\s*([^：:]+)[：:]\s*(\d+)/);
+      if (m) fixedCosts.push({ name: m[1].trim(), amount: parseInt(m[2], 10) });
+      continue;
+    }
+
+    // Day header: ### 2026/07/01：1620：● (mark may be ● or ×/✕/✖ variants, or absent)
+    const dayMatch = trimmed.match(/^###\s*(\d{4})\/(\d{2})\/(\d{2})\s*[：:]\s*(-?\d+)?\s*[：:]?\s*([●✖✕×]?)/);
+    if (dayMatch) {
+      const [, y, m, d, amtStr, mark] = dayMatch;
+      const dateStr = `${y}-${m}-${d}`;
+      if (!monthLabel) monthLabel = `${y}年${parseInt(m,10)}月`;
+      const existing = days.find(dd => dd.date === dateStr);
+      if (existing) {
+        existing.duplicateBlocks = (existing.duplicateBlocks || 1) + 1;
+        if (amtStr !== undefined) existing.writtenAmount = (existing.writtenAmount || 0) + parseInt(amtStr, 10);
+        currentDay = existing;
+      } else {
+        currentDay = {
+          date: dateStr,
+          day: parseInt(d, 10),
+          writtenAmount: amtStr !== undefined ? parseInt(amtStr, 10) : null,
+          writtenMark: mark || null,
+          stores: [],
+        };
+        days.push(currentDay);
+      }
+      currentStore = null;
+      continue;
+    }
+
+    // Store header: #### 店名：店舗合計
+    if (currentDay) {
+      const storeMatch = trimmed.match(/^####\s*(.+?)\s*[：:]\s*(-?\d+)/);
+      if (storeMatch) {
+        currentStore = { name: storeMatch[1].trim(), writtenTotal: parseInt(storeMatch[2], 10), lineItems: [] };
+        currentDay.stores.push(currentStore);
+        continue;
+      }
+    }
+
+    // Line item: - 〔タグ〕品名　金額  (no special indentation required)
+    if (currentStore && /^[-*]\s/.test(trimmed)) {
+      let itemText = trimmed.replace(/^[-*]\s*/, '');
+      const isStrike = /^~~.*~~$/.test(itemText);
+      itemText = itemText.replace(/~~/g, '');
+
+      const tags = extractTags(itemText);
+      const nameAndAmount = stripTags(itemText);
+      const { amount, name } = parseAmountAndName(nameAndAmount);
+
+      currentStore.lineItems.push({ name, amount, tags, isStrike });
+      continue;
+    }
+  }
+
+  return { income, fixedCosts, days, monthLabel };
+}
+
+// ---- OLD format parser (indentation-based, kept for backward compatibility) --
+function parseOldFormat(md) {
+  const lines = md.split('\n');
+
+  let income = 0;
+  let fixedCosts = [];
+  let days = [];
+  let monthLabel = null;
+
+  let section = null;
+  let currentDay = null;
+  let currentStore = null;
+
+  for (let rawLine of lines) {
+    const line = rawLine;
+    const trimmed = line.trim();
+    if (trimmed === '') continue;
+
+    if (/^#\s+収入/.test(trimmed)) { section = '収入'; currentDay = null; currentStore = null; continue; }
+    if (/^#\s+固定費/.test(trimmed)) { section = '固定費'; currentDay = null; currentStore = null; continue; }
+    if (/^#\s+合計/.test(trimmed)) { section = '合計'; currentDay = null; currentStore = null; continue; }
+    if (/^#\s+\d+\/\d+週/.test(trimmed)) { section = '週'; currentDay = null; currentStore = null; continue; }
+
+    if (section === '合計') continue;
+
+    if (section === '収入' && /^-\s*\d+/.test(trimmed)) {
+      income += parseInt(trimmed.replace(/[^\d]/g, ''), 10);
+      continue;
+    }
+
+    if (section === '固定費' && /^-\s*[^：:]+[：:]\s*\d+/.test(trimmed)) {
+      const m = trimmed.match(/^-\s*([^：:]+)[：:]\s*(\d+)/);
+      if (m) fixedCosts.push({ name: m[1].trim(), amount: parseInt(m[2], 10) });
+      continue;
+    }
+
+    let dayMatch = trimmed.match(/^##\s*(\d{4})\/(\d{2})\/(\d{2})\s*[：:]\s*([●✖✕×]?)\s*(\d+)?/);
+    if (dayMatch) {
+      const [, y, m, d, mark, amtStr] = dayMatch;
+      const dateStr = `${y}-${m}-${d}`;
+      if (!monthLabel) monthLabel = `${y}年${parseInt(m,10)}月`;
+      // Guard against duplicate "## YYYY/MM/DD" headers for the same date in the
+      // source file (a known hand-entry mistake) by merging into the existing
+      // record instead of overwriting it, so no data is silently dropped.
+      const existing = days.find(dd => dd.date === dateStr);
+      if (existing) {
+        existing.duplicateBlocks = (existing.duplicateBlocks || 1) + 1;
+        if (amtStr !== undefined) {
+          existing.writtenAmount = (existing.writtenAmount || 0) + parseInt(amtStr, 10);
+        }
+        currentDay = existing;
+      } else {
+        currentDay = {
+          date: dateStr,
+          day: parseInt(d, 10),
+          writtenAmount: amtStr !== undefined ? parseInt(amtStr, 10) : null,
+          writtenMark: mark || null,
+          stores: [],
+        };
+        days.push(currentDay);
+      }
+      currentStore = null;
+      continue;
+    }
+
+    // Store line: no leading tab/space before the dash
+    if (currentDay && /^-\s/.test(trimmed) && !/^[\t ]/.test(line)) {
+      const storeMatch = trimmed.match(/^-\s*(.+?)\s*[：:]\s*(.*)$/);
+      let storeName, rest;
+      if (storeMatch) {
+        storeName = storeMatch[1].trim();
+        rest = storeMatch[2].trim();
+      } else {
+        storeName = trimmed.replace(/^-\s*/, '').trim();
+        rest = '';
+      }
+      let writtenTotal = null;
+      const numMatch = rest.match(/-?\d+/);
+      if (numMatch && !/ポイント支払い/.test(rest)) writtenTotal = parseInt(numMatch[0], 10);
+      currentStore = { name: storeName, writtenTotal, lineItems: [] };
+      currentDay.stores.push(currentStore);
+      continue;
+    }
+
+    // Line item: indented with tab or spaces
+    if (currentStore && /^[\t ]+-\s/.test(line)) {
+      let itemText = trimmed.replace(/^-\s*/, '');
+      const isStrike = /^~~.*~~$/.test(itemText);
+      itemText = itemText.replace(/~~/g, '');
+
+      const tags = extractTags(itemText);
+      const nameAndAmount = stripTags(itemText);
+      const { amount, name } = parseAmountAndName(nameAndAmount);
+
+      // Point handling is unified on the 〔ポ〕/【ポ】 tag only (amount written
+      // as a positive number, subtracted automatically downstream). Old files
+      // that wrote a bare "ポイント -130" line with a negative amount and no
+      // tag are treated as a plain (untagged) line item rather than guessed
+      // at, since guessing the sign previously caused double-counting bugs.
+      currentStore.lineItems.push({ name, amount, tags, isStrike });
+      continue;
+    }
+  }
+
+  return { income, fixedCosts, days, monthLabel };
+}
+
+/* =========================================================
+   2. AGGREGATION
+   ========================================================= */
+function aggregate(parsed) {
+  const SKIP_TAGS = ['年', '特'];     // never counted in any total (store or day)
+  const SUBTRACT_TAGS = ['ポ'];       // subtracted from store/day totals
+  let totalAll = 0;        // includes 年/特, used only for the "全体" summary figure
+  let totalCore = 0;       // excludes 年/特 (and already nets out ポ) = "通常支出"
+  const tagTotals = {};
+  const storeTotals = {};
+  let untagged = 0;
+
+  const dayRecords = [];
+
+  for (const day of parsed.days) {
+    let dayAllForMismatch = 0; // mirrors the store-total calc rule, for comparing against writtenAmount
+    let dayCore = 0;
+    const storeBreak = [];
+
+    for (const store of day.stores) {
+      let storeCalc = 0; // follows normal/skip/subtract rule, same as the source Templater script
+      for (const item of store.lineItems) {
+        if (item.isStrike) continue; // tentative/cancelled entries (e.g. unconfirmed bookings) never count
+
+        const tag = item.tags[0]; // at most one tag per item, by design
+        const isSkip = SKIP_TAGS.includes(tag);
+        const isSubtract = SUBTRACT_TAGS.includes(tag);
+
+        if (isSkip) {
+          // not counted anywhere except the tag breakdown and the "全体" total
+          totalAll += item.amount;
+        } else if (isSubtract) {
+          storeCalc -= item.amount;
+          totalCore -= item.amount;
+          totalAll -= item.amount;
+          dayCore -= item.amount;
+        } else {
+          storeCalc += item.amount;
+          totalCore += item.amount;
+          totalAll += item.amount;
+          dayCore += item.amount;
+        }
+
+        if (!tag) untagged += item.amount;
+        if (tag) tagTotals[tag] = (tagTotals[tag] || 0) + item.amount;
+        storeTotals[store.name] = (storeTotals[store.name] || 0) + (isSubtract ? -item.amount : (isSkip ? 0 : item.amount));
+      }
+      storeBreak.push({ name: store.name, amount: storeCalc });
+      dayAllForMismatch += storeCalc;
+    }
+
+    const mismatch = day.writtenAmount !== null && day.writtenAmount !== dayAllForMismatch;
+
+    dayRecords.push({
+      date: day.date,
+      day: day.day,
+      dayCalc: dayAllForMismatch,
+      dayCore,
+      mismatch,
+      writtenAmount: day.writtenAmount,
+      writtenMark: day.writtenMark || null,
+      stores: storeBreak,
+      duplicateBlocks: day.duplicateBlocks || 1,
+    });
+  }
+
+  const fixedTotal = parsed.fixedCosts.reduce((s, f) => s + f.amount, 0);
+  const remaining = parsed.income - fixedTotal - totalCore;
+  const remainingWithSpecial = parsed.income - fixedTotal - totalAll;
+
+  return {
+    income: parsed.income,
+    fixedCosts: parsed.fixedCosts,
+    fixedTotal,
+    totalAll,
+    totalCore,
+    specialTotal: totalAll - totalCore,
+    tagTotals,
+    storeTotals,
+    untagged,
+    remaining,
+    remainingWithSpecial,
+    dayRecords,
+    monthLabel: parsed.monthLabel,
+  };
+}
+
+const DAILY_BUDGET = 3000;
+const TAG_COLORS = { '浪': 'var(--red)', '家': 'var(--green)', '年': 'var(--gold)', '特': '#8B7BA8', 'ポ': '#6E8AA8' };
+const TAG_FULL_NAME = { '浪': '浪費', '家': '家', '年': '年', '特': '特別費', 'ポ': 'ポイント' };
+const DOW_LABELS = ['月','火','水','木','金','土','日'];
+
+function yen(n){ return n.toLocaleString('ja-JP'); }
+function signedYen(n){ return (n<0?'－':'') + yen(Math.abs(n)); }
+
+/* =========================================================
+   3. RENDER
+   ========================================================= */
+let CURRENT_DATA = null;
+
+function render(data){
+  CURRENT_DATA = data;
+  const el = document.getElementById('dashboard');
+  el.style.display = 'block';
+  document.getElementById('importScreen').style.display = 'none';
+  document.getElementById('headerActions').style.display = 'flex';
+
+  el.innerHTML = `
+    ${renderMonthBanner(data)}
+    ${renderSpread(data)}
+    ${renderMismatchPanel(data)}
+    <div class="two-col">
+      <div>
+        ${renderCalendarSection(data)}
+        ${renderWeeklySection(data)}
+      </div>
+      <div>
+        ${renderTagSection(data)}
+        ${renderRankSection(data)}
+      </div>
+    </div>
+  `;
+}
+
+function renderMonthBanner(data){
+  return `<div class="month-banner font-ui">
+    <span class="pill">${data.monthLabel || '今月'}</span>
+    <span>記載項目から自動集計 / 1日の予算ライン ${yen(DAILY_BUDGET)}円</span>
+  </div>`;
+}
+
+function renderSpread(data){
+  const remainCls = data.remaining >= 0 ? 'positive' : 'negative';
+  return `
+  <div class="spread">
+    <div class="cell income">
+      <div class="label font-ui">収入</div>
+      <div class="value font-num">${yen(data.income)}<span class="yen">円</span></div>
+    </div>
+    <div class="cell">
+      <div class="label font-ui">固定費</div>
+      <div class="value font-num">${yen(data.fixedTotal)}<span class="yen">円</span></div>
+      <div class="sub">${data.fixedCosts.map(f=>`${f.name} ${yen(f.amount)}`).join(' / ')}</div>
+    </div>
+    <div class="cell expense">
+      <div class="label font-ui">支出（通常）</div>
+      <div class="value font-num">${yen(data.totalCore)}<span class="yen">円</span></div>
+      <div class="sub">〔年〕〔特〕含む全体: ${yen(data.totalAll)}円</div>
+    </div>
+    <div class="cell remain">
+      <div class="label font-ui">残り（収入－固定費－支出）</div>
+      <div class="value font-num ${remainCls}">${signedYen(data.remaining)}<span class="yen">円</span></div>
+      <div class="sub">特別費含む場合: ${signedYen(data.remainingWithSpecial)}円</div>
+    </div>
+  </div>`;
+}
+
+function renderMismatchPanel(data){
+  const mismatches = data.dayRecords.filter(d => d.mismatch);
+  const duplicates = data.dayRecords.filter(d => d.duplicateBlocks > 1);
+  if (mismatches.length === 0 && duplicates.length === 0) return '';
+
+  let html = '';
+  if (mismatches.length){
+    const items = mismatches.map(d => {
+      const md = d.date.slice(5).replace('-', '/');
+      return `<li>${md}：記載 ${yen(d.writtenAmount)}円 → 品目集計 ${yen(d.dayCalc)}円</li>`;
+    }).join('');
+    html += `⚠️ 記載金額と品目の合計が一致しない日が ${mismatches.length} 件あります（品目集計を正として表示しています）<ul>${items}</ul>`;
+  }
+  if (duplicates.length){
+    const items = duplicates.map(d => {
+      const md = d.date.slice(5).replace('-', '/');
+      return `<li>${md}：同じ日付の見出しが${d.duplicateBlocks}回登場（合算して表示。日付の入力ミスの可能性があります）</li>`;
+    }).join('');
+    html += `⚷ 元ファイルで日付が重複している箇所があります<ul>${items}</ul>`;
+  }
+  return `<div class="mismatch-panel">${html}</div>`;
+}
+
+function renderCalendarSection(data){
+  const recordsByDay = {};
+  data.dayRecords.forEach(d => recordsByDay[d.day] = d);
+
+  const firstDate = data.dayRecords[0] ? new Date(data.dayRecords[0].date) : null;
+  let leadBlanks = 0;
+  if (firstDate) {
+    const jsDow = firstDate.getDay(); // 0=Sun..6=Sat
+    leadBlanks = (jsDow + 6) % 7; // convert to Mon=0..Sun=6
+  }
+  const lastDay = data.dayRecords.length ? data.dayRecords[data.dayRecords.length-1].day : 0;
+
+  let cells = '';
+  for (let i=0;i<leadBlanks;i++) cells += `<div class="cell blank"></div>`;
+  for (let d=1; d<=lastDay; d++){
+    const rec = recordsByDay[d];
+    if (!rec) { cells += `<div class="cell blank"></div>`; continue; }
+    // Prefer the hand-written ●/× mark when present (new format); fall back
+    // to an auto budget-line judgement only when no mark was recorded.
+    const over = rec.writtenMark
+      ? /[×✕✖]/.test(rec.writtenMark)
+      : rec.dayCore > DAILY_BUDGET;
+    const flags = [];
+    if (rec.mismatch) flags.push(`<span class="flag mismatch-flag" title="記載値と品目集計が不一致">⚠ 不一致</span>`);
+    if (rec.duplicateBlocks > 1) flags.push(`<span class="flag dup-flag" title="この日付の見出しが元ファイルに${rec.duplicateBlocks}回登場（合算表示）">⚷ 重複日付</span>`);
+    cells += `<div class="cell ${over ? 'over':'under'}">
+      <div class="d">${d}</div>
+      <div class="amt font-num">${yen(rec.dayCore)}</div>
+      ${flags.length ? `<div class="flags">${flags.join('')}</div>` : ''}
+    </div>`;
+  }
+  const dowHeader = DOW_LABELS.map(l=>`<div class="dow">${l}</div>`).join('');
+
+  return `<div class="section">
+    <div class="section-head">
+      <h2>日別カレンダー</h2>
+      <span class="note font-ui">〔年〕〔特〕は除いた金額・記載の●×を反映</span>
+    </div>
+    <div class="calendar">${dowHeader}${cells}</div>
+    <div class="calendar-legend">
+      <span><span class="sw" style="background:rgba(168,68,58,0.35)"></span>予算超過／記載×</span>
+      <span><span class="sw" style="background:var(--white);border:1px solid var(--line)"></span>予算内／記載●</span>
+      <span>⚠ 記載値と不一致／⚷ 元ファイルで日付が重複</span>
+    </div>
+  </div>`;
+}
+
+function getWeekKey(dateStr){
+  const d = new Date(dateStr);
+  const jsDow = d.getDay();
+  const diffToMonday = (jsDow + 6) % 7;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - diffToMonday);
+  return monday.toISOString().slice(0,10);
+}
+
+function renderWeeklySection(data){
+  const weeks = {};
+  data.dayRecords.forEach(d => {
+    const wk = getWeekKey(d.date);
+    weeks[wk] = (weeks[wk]||0) + d.dayCore;
+  });
+  const keys = Object.keys(weeks).sort();
+  const values = keys.map(k=>weeks[k]);
+  const max = Math.max(...values, 1);
+  const avg = values.reduce((s,v)=>s+v,0) / (values.length||1);
+
+  const bars = keys.map((k,i)=>{
+    const v = weeks[k];
+    const h = Math.max((v/max)*100, 2);
+    const over = v > avg;
+    const md = k.slice(5).replace('-','/');
+    return `<div class="bar-wrap">
+      <div class="bar ${over?'over-avg':''}" style="height:${h}%"></div>
+      <div class="bar-val">${yen(v)}</div>
+      <div class="bar-label">${md}〜</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="section">
+    <div class="section-head">
+      <h2>週ごとの推移</h2>
+      <span class="note font-ui">月〜日区切り・通常支出のみ</span>
+    </div>
+    <div class="weekchart">${bars}</div>
+  </div>`;
+}
+
+function renderTagSection(data){
+  const allTags = Object.keys(data.tagTotals);
+  const denom = data.totalAll || 1;
+  const rows = [];
+
+  // explicit order: 浪, 家, then others, untagged last
+  const order = ['浪','家', ...allTags.filter(t=>!['浪','家'].includes(t))];
+  const seen = new Set();
+  for (const tag of order){
+    if (seen.has(tag) || !(tag in data.tagTotals)) continue;
+    seen.add(tag);
+    const amt = data.tagTotals[tag];
+    const pct = Math.round((amt/denom)*100);
+    const color = TAG_COLORS[tag] || 'var(--ink-soft)';
+    rows.push(`<div class="tagbar-row">
+      <div class="top"><span class="name">〔${tag}〕${TAG_FULL_NAME[tag] && TAG_FULL_NAME[tag]!==tag ? ' '+TAG_FULL_NAME[tag] : ''}</span><span class="amt font-num">${yen(amt)}円・${pct}%</span></div>
+      <div class="tagbar-track"><div class="tagbar-fill" style="width:${Math.min(pct,100)}%;background:${color}"></div></div>
+    </div>`);
+  }
+  // untagged
+  const untaggedPct = Math.round((data.untagged/denom)*100);
+  rows.push(`<div class="tagbar-row">
+    <div class="top"><span class="name">未分類</span><span class="amt font-num">${yen(data.untagged)}円・${untaggedPct}%</span></div>
+    <div class="tagbar-track"><div class="tagbar-fill" style="width:${Math.min(untaggedPct,100)}%;background:var(--line-strong)"></div></div>
+  </div>`);
+
+  const wasteRatio = Math.round(((data.tagTotals['浪']||0)/denom)*100);
+
+  return `<div class="section">
+    <div class="section-head">
+      <h2>タグ別の割合</h2>
+      <span class="note font-ui">浪費比率 ${wasteRatio}%</span>
+    </div>
+    ${rows.join('')}
+  </div>`;
+}
+
+function renderRankSection(data){
+  const storeEntries = Object.entries(data.storeTotals).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const tagEntries = Object.entries(data.tagTotals).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  function list(entries, labelFn){
+    return `<ul class="ranklist">${entries.map((e,i)=>`
+      <li><span class="rank">${String(i+1).padStart(2,'0')}</span><span class="name">${labelFn(e[0])}</span><span class="amt font-num">${yen(e[1])}円</span></li>
+    `).join('')}</ul>`;
+  }
+
+  return `<div class="section">
+    <div class="section-head">
+      <h2>ランキング（上位5）</h2>
+      <span class="note font-ui" id="rankToggleWrap">
+        <span class="toggle-group" id="rankToggle">
+          <button class="active" data-mode="store">店舗別</button>
+          <button data-mode="tag">タグ別</button>
+        </span>
+      </span>
+    </div>
+    <div id="rankStore">${list(storeEntries, n=>n)}</div>
+    <div id="rankTag" style="display:none;">${list(tagEntries, n=>`〔${n}〕${TAG_FULL_NAME[n]&&TAG_FULL_NAME[n]!==n?' '+TAG_FULL_NAME[n]:''}`)}</div>
+  </div>`;
+}
+
+/* =========================================================
+   4. EXPORT (summary markdown)
+   ========================================================= */
+function buildExportMarkdown(data){
+  const lines = [];
+  lines.push(`# ${data.monthLabel || ''} 家計簿サマリ`);
+  lines.push('');
+  lines.push(`- 収入：${yen(data.income)}円`);
+  lines.push(`- 固定費：${yen(data.fixedTotal)}円（${data.fixedCosts.map(f=>`${f.name} ${yen(f.amount)}`).join('、')}）`);
+  lines.push(`- 支出（通常）：${yen(data.totalCore)}円`);
+  lines.push(`- 支出（〔年〕〔特〕含む全体）：${yen(data.totalAll)}円`);
+  lines.push(`- 残り（収入－固定費－支出）：${signedYen(data.remaining)}円`);
+  lines.push(`- 残り（特別費含む場合）：${signedYen(data.remainingWithSpecial)}円`);
+  lines.push('');
+  lines.push('## タグ別合計');
+  const denom = data.totalAll || 1;
+  for (const [tag, amt] of Object.entries(data.tagTotals)){
+    const full = TAG_FULL_NAME[tag] && TAG_FULL_NAME[tag] !== tag ? `（${TAG_FULL_NAME[tag]}）` : '';
+    lines.push(`- 〔${tag}〕${full}：${yen(amt)}円（${Math.round((amt/denom)*100)}%）`);
+  }
+  lines.push(`- 未分類：${yen(data.untagged)}円（${Math.round((data.untagged/denom)*100)}%）`);
+  lines.push('');
+  lines.push('## 店舗別ランキング（上位5）');
+  Object.entries(data.storeTotals).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([name,amt],i)=>{
+    lines.push(`${i+1}. ${name}：${yen(amt)}円`);
+  });
+  lines.push('');
+  lines.push('## 週ごとの合計（通常支出）');
+  const weeks = {};
+  data.dayRecords.forEach(d => {
+    const wk = getWeekKey(d.date);
+    weeks[wk] = (weeks[wk]||0) + d.dayCore;
+  });
+  Object.keys(weeks).sort().forEach((k,i)=>{
+    lines.push(`- 第${i+1}週（${k.slice(5).replace('-','/')}〜）：${yen(weeks[k])}円`);
+  });
+  lines.push('');
+  if (data.dayRecords.some(d=>d.mismatch)){
+    lines.push('## 記載金額と集計の不一致（要確認）');
+    data.dayRecords.filter(d=>d.mismatch).forEach(d=>{
+      lines.push(`- ${d.date.slice(5).replace('-','/')}：記載 ${yen(d.writtenAmount)}円 → 集計 ${yen(d.dayCalc)}円`);
+    });
+  }
+  return lines.join('\n');
+}
+
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:'text/markdown;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
+/* =========================================================
+   5. EVENTS
+   ========================================================= */
+function showError(msg){
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+function clearError(){
+  document.getElementById('errorBox').style.display = 'none';
+}
+
+function handleFile(file){
+  clearError();
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const parsed = parseKakeibo(text);
+      if (!parsed.days.length && !parsed.income && !parsed.fixedCosts.length){
+        showError('ファイルから家計簿データを読み取れませんでした。フォーマットをご確認ください。');
+        return;
+      }
+      const data = aggregate(parsed);
+      render(data);
+    } catch(err){
+      showError('読み込み中にエラーが発生しました：' + err.message);
+      console.error(err);
+    }
+  };
+  reader.onerror = () => showError('ファイルの読み込みに失敗しました。');
+  reader.readAsText(file, 'utf-8');
+}
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, (e)=>{
+  e.preventDefault(); dropzone.classList.add('drag-over');
+}));
+['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, (e)=>{
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+}));
+dropzone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  handleFile(file);
+});
+
+document.getElementById('reimportBtn').addEventListener('click', () => {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('headerActions').style.display = 'none';
+  document.getElementById('importScreen').style.display = 'block';
+  fileInput.value = '';
+  clearError();
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!CURRENT_DATA) return;
+  const md = buildExportMarkdown(CURRENT_DATA);
+  let label = 'summary';
+  const ml = CURRENT_DATA.monthLabel; // e.g. "2026年6月"
+  const m = ml && ml.match(/(\d+)年(\d+)月/);
+  if (m) label = `${m[1]}${m[2].padStart(2,'0')}`;
+  downloadText(`家計簿サマリ_${label}.md`, md);
+});
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#rankToggle button');
+  if (!btn) return;
+  document.querySelectorAll('#rankToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const mode = btn.dataset.mode;
+  document.getElementById('rankStore').style.display = mode === 'store' ? 'block' : 'none';
+  document.getElementById('rankTag').style.display = mode === 'tag' ? 'block' : 'none';
+});
+</script>
+</body>
+</html>
