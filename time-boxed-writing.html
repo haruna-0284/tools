@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TIME-BOXED WRITING</title>
+<meta name="theme-color" content="#FFFFFF">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --ink:#111111;
+    --yellow:#FFE347;
+    --red:#FF4B3E;
+    --blue:#3F6FFF;
+    --grey:#F0F0F0;
+    --grey-line:#D8D8D8;
+    --text-dim:#6B6B6B;
+    --font-mono:"JetBrains Mono", monospace;
+    --font-jp:"Zen Kaku Gothic New", sans-serif;
+    --bw:3px;         /* border width */
+    --sh:6px;         /* shadow offset */
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-jp);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  button{font-family:inherit;cursor:pointer;}
+  .screen{
+    min-height:100vh;
+    min-height:100dvh;
+    display:none;
+    flex-direction:column;
+    background:var(--bg);
+  }
+  .screen.active{display:flex;}
+
+  /* generic brutalist press-button */
+  .brut{
+    border:var(--bw) solid var(--ink);
+    background:var(--bg);
+    box-shadow:var(--sh) var(--sh) 0 var(--ink);
+    transition:transform .08s, box-shadow .08s;
+  }
+  .brut:hover{transform:translate(-2px,-2px);box-shadow:calc(var(--sh) + 2px) calc(var(--sh) + 2px) 0 var(--ink);}
+  .brut:active{transform:translate(var(--sh),var(--sh));box-shadow:0 0 0 var(--ink);}
+
+  /* ---------- SETUP SCREEN ---------- */
+  #setup{
+    align-items:center;
+    justify-content:center;
+    padding:40px 20px;
+  }
+  .setup-card{
+    width:100%;
+    max-width:480px;
+    text-align:center;
+  }
+  .back-link{
+    position:fixed;
+    top:20px;
+    left:20px;
+    font-family:var(--font-mono);
+    font-weight:700;
+    font-size:12px;
+    letter-spacing:.1em;
+    color:var(--text-dim);
+    text-decoration:none;
+    z-index:20;
+  }
+  .back-link:hover{color:var(--ink);}
+
+  .title-tag{
+    display:inline-block;
+    font-family:var(--font-mono);
+    font-weight:800;
+    font-size:clamp(22px,6.5vw,32px);
+    letter-spacing:.02em;
+    color:var(--ink);
+    background:var(--yellow);
+    border:var(--bw) solid var(--ink);
+    box-shadow:var(--sh) var(--sh) 0 var(--ink);
+    padding:14px 22px;
+    margin:0 0 40px;
+    text-transform:uppercase;
+  }
+
+  .duration-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    margin-bottom:28px;
+  }
+  .duration-btn{
+    padding:16px 6px;
+    font-family:var(--font-mono);
+    font-weight:700;
+    font-size:16px;
+    color:var(--ink);
+    border-radius:0;
+  }
+  .duration-btn .label-jp{
+    display:block;
+    font-family:var(--font-jp);
+    font-weight:700;
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:4px;
+  }
+  .duration-btn.selected{background:var(--yellow);}
+  .duration-btn.selected .label-jp{color:var(--ink);}
+
+  .start-btn{
+    width:100%;
+    padding:20px;
+    background:var(--red);
+    color:#fff;
+    font-family:var(--font-jp);
+    font-weight:900;
+    font-size:22px;
+    letter-spacing:.12em;
+    border-radius:0;
+  }
+
+  .setup-foot{
+    margin-top:22px;
+    font-size:12px;
+    color:var(--text-dim);
+    line-height:1.7;
+    font-weight:500;
+  }
+
+  /* ---------- EDITOR SCREEN ---------- */
+  .editor-header{
+    background:var(--bg);
+    border-bottom:var(--bw) solid var(--ink);
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  .timer-block{display:flex;align-items:center;gap:12px;}
+  .timer-readout{
+    font-family:var(--font-mono);
+    font-weight:800;
+    font-size:clamp(26px,6vw,36px);
+    letter-spacing:.02em;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    padding:4px 12px;
+    border:var(--bw) solid var(--ink);
+    transition:background .2s,color .2s;
+  }
+  .timer-readout.warn{background:var(--yellow);}
+  .timer-readout.danger{background:var(--red);color:#fff;animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+  .timer-tag{
+    font-size:10px;
+    letter-spacing:.2em;
+    color:var(--text-dim);
+    font-family:var(--font-mono);
+    font-weight:700;
+    text-transform:uppercase;
+  }
+  .finish-btn{
+    background:var(--yellow);
+    color:var(--ink);
+    padding:11px 20px;
+    font-weight:800;
+    font-size:14px;
+    letter-spacing:.05em;
+    white-space:nowrap;
+    border-radius:0;
+  }
+
+  .paper-wrap{
+    flex:1;
+    background:var(--bg);
+    display:flex;
+    padding:0;
+  }
+  #editArea{
+    flex:1;
+    width:100%;
+    border:none;
+    outline:none;
+    resize:none;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-jp);
+    font-weight:500;
+    font-size:18px;
+    line-height:1.9;
+    padding:28px 24px 120px;
+    caret-color:var(--red);
+  }
+  #editArea[readonly]{
+    background:var(--grey);
+    color:#555;
+  }
+
+  .locked-banner{
+    display:none;
+    background:var(--red);
+    color:#fff;
+    text-align:center;
+    font-size:13px;
+    font-weight:800;
+    letter-spacing:.06em;
+    padding:10px;
+    border-bottom:var(--bw) solid var(--ink);
+  }
+  .locked-banner.show{display:block;}
+
+  /* ---------- OUTPUT SCREEN ---------- */
+  #output{align-items:stretch;}
+  .output-header{
+    background:var(--bg);
+    border-bottom:var(--bw) solid var(--ink);
+    padding:24px 20px;
+    text-align:center;
+  }
+  .output-header h2{
+    font-size:20px;
+    margin:0 0 16px;
+    font-weight:900;
+  }
+  .stats-row{
+    display:flex;
+    justify-content:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .stat{
+    font-family:var(--font-mono);
+    text-align:left;
+    border:var(--bw) solid var(--ink);
+    padding:8px 14px;
+  }
+  .stat-label{
+    font-size:10px;
+    letter-spacing:.12em;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    font-weight:700;
+  }
+  .stat-value{
+    font-size:19px;
+    font-weight:800;
+    color:var(--ink);
+  }
+  .output-body{
+    flex:1;
+    background:var(--bg);
+    padding:24px;
+    overflow-y:auto;
+  }
+  #outputText{
+    white-space:pre-wrap;
+    word-break:break-word;
+    font-family:var(--font-jp);
+    font-weight:500;
+    font-size:17px;
+    line-height:1.9;
+    color:var(--ink);
+    max-width:640px;
+    margin:0 auto;
+  }
+  .output-actions{
+    background:var(--bg);
+    border-top:var(--bw) solid var(--ink);
+    padding:16px 20px calc(16px + env(safe-area-inset-bottom));
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .action-btn{
+    flex:1;
+    min-width:150px;
+    max-width:260px;
+    padding:14px 18px;
+    font-weight:800;
+    font-size:14px;
+    letter-spacing:.02em;
+    border-radius:0;
+    color:var(--ink);
+  }
+  .action-copy{background:var(--bg);}
+  .action-image{background:var(--yellow);}
+  .action-restart{
+    flex-basis:100%;
+    max-width:none;
+    font-size:12px;
+    padding:10px;
+    background:var(--bg);
+    border:var(--bw) solid var(--text-dim);
+    color:var(--text-dim);
+    box-shadow:none;
+  }
+  .action-restart:hover{transform:none;box-shadow:none;border-color:var(--ink);color:var(--ink);}
+  .action-restart:active{transform:none;box-shadow:none;}
+
+  .toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--bg);
+    color:var(--ink);
+    border:var(--bw) solid var(--ink);
+    box-shadow:var(--sh) var(--sh) 0 var(--ink);
+    padding:12px 22px;
+    font-size:13px;
+    font-weight:800;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s, transform .25s;
+    z-index:100;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:420px){
+    .duration-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
+    .duration-btn{padding:14px 4px;font-size:14px;}
+    .stats-row{gap:10px;}
+    .stat{padding:6px 10px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<section id="setup" class="screen active">
+  <div class="setup-card">
+    <a href="./index.html" class="back-link">← TOOLS</a>
+    <div class="title-tag">TIME-BOXED WRITING</div>
+
+    <div class="duration-grid brut-group" id="durationGrid">
+      <button class="duration-btn brut" data-seconds="7200">2:00<span class="label-jp">2時間</span></button>
+      <button class="duration-btn brut selected" data-seconds="3600">1:00<span class="label-jp">1時間</span></button>
+      <button class="duration-btn brut" data-seconds="1800">0:30<span class="label-jp">30分</span></button>
+      <button class="duration-btn brut" data-seconds="900">0:15<span class="label-jp">15分</span></button>
+      <button class="duration-btn brut" data-seconds="600">0:10<span class="label-jp">10分</span></button>
+      <button class="duration-btn brut" data-seconds="300">0:05<span class="label-jp">5分</span></button>
+    </div>
+
+    <button class="start-btn brut" id="startBtn">START</button>
+    <p class="setup-foot">開始後は制限時間のカウントダウンが表示されます。<br>途中でも「完成」ボタンで終了できます。</p>
+  </div>
+</section>
+
+<!-- ============ EDITOR ============ -->
+<section id="editor" class="screen">
+  <header class="editor-header">
+    <div class="timer-block">
+      <span class="timer-readout" id="timerReadout">60:00</span>
+      <span class="timer-tag">残り時間</span>
+    </div>
+    <button class="finish-btn brut" id="finishBtn">✓ 完成</button>
+  </header>
+  <div class="locked-banner" id="lockedBanner">⏰ 制限時間が終了しました。これ以上は書き込めません。</div>
+  <div class="paper-wrap">
+    <textarea id="editArea" autofocus></textarea>
+  </div>
+</section>
+
+<!-- ============ OUTPUT ============ -->
+<section id="output" class="screen">
+  <div class="output-header">
+    <h2 id="outputTitle">✓ 完成しました</h2>
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-label">制限時間</div>
+        <div class="stat-value" id="statLimit">00:00:00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">使用時間</div>
+        <div class="stat-value" id="statUsed">00:00:00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">文字数</div>
+        <div class="stat-value" id="statChars">0</div>
+      </div>
+    </div>
+  </div>
+  <div class="output-body">
+    <div id="outputText"></div>
+  </div>
+  <div class="output-actions">
+    <button class="action-btn action-copy brut" id="copyBtn">全文をコピー</button>
+    <button class="action-btn action-image brut" id="imageBtn">縦長画像で保存</button>
+    <button class="action-btn action-restart" id="restartBtn">新しく書き始める</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- state ----------
+  var selectedSeconds = 3600;
+  var limitSeconds = 3600;
+  var startTimestamp = null;
+  var tickHandle = null;
+  var finished = false;
+
+  // ---------- elements ----------
+  var setupScreen = document.getElementById('setup');
+  var editorScreen = document.getElementById('editor');
+  var outputScreen = document.getElementById('output');
+
+  var durationGrid = document.getElementById('durationGrid');
+  var startBtn = document.getElementById('startBtn');
+
+  var timerReadout = document.getElementById('timerReadout');
+  var finishBtn = document.getElementById('finishBtn');
+  var editArea = document.getElementById('editArea');
+  var lockedBanner = document.getElementById('lockedBanner');
+
+  var outputTitle = document.getElementById('outputTitle');
+  var statLimit = document.getElementById('statLimit');
+  var statUsed = document.getElementById('statUsed');
+  var statChars = document.getElementById('statChars');
+  var outputText = document.getElementById('outputText');
+  var copyBtn = document.getElementById('copyBtn');
+  var imageBtn = document.getElementById('imageBtn');
+  var restartBtn = document.getElementById('restartBtn');
+  var toast = document.getElementById('toast');
+
+  // ---------- helpers ----------
+  function pad2(n){ return (n<10?'0':'')+n; }
+
+  // full HH:MM:SS, always
+  function formatFull(sec){
+    sec = Math.max(0, Math.round(sec));
+    var h = Math.floor(sec/3600);
+    var m = Math.floor((sec%3600)/60);
+    var s = sec%60;
+    return pad2(h)+':'+pad2(m)+':'+pad2(s);
+  }
+
+  // header countdown: show H:MM:SS if >=1h selected, else MM:SS
+  function formatCountdown(sec){
+    sec = Math.max(0, Math.ceil(sec));
+    var h = Math.floor(sec/3600);
+    var m = Math.floor((sec%3600)/60);
+    var s = sec%60;
+    if (limitSeconds >= 3600){
+      return h+':'+pad2(m)+':'+pad2(s);
+    }
+    return pad2(m)+':'+pad2(s);
+  }
+
+  function showScreen(el){
+    [setupScreen, editorScreen, outputScreen].forEach(function(s){ s.classList.remove('active'); });
+    el.classList.add('active');
+    window.scrollTo(0,0);
+  }
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 2200);
+  }
+
+  // ---------- setup screen ----------
+  durationGrid.addEventListener('click', function(e){
+    var btn = e.target.closest('.duration-btn');
+    if (!btn) return;
+    Array.prototype.forEach.call(durationGrid.children, function(b){ b.classList.remove('selected'); });
+    btn.classList.add('selected');
+    selectedSeconds = parseInt(btn.getAttribute('data-seconds'), 10);
+  });
+
+  startBtn.addEventListener('click', function(){
+    limitSeconds = selectedSeconds;
+    finished = false;
+    editArea.value = '';
+    editArea.readOnly = false;
+    lockedBanner.classList.remove('show');
+    timerReadout.classList.remove('warn','danger');
+    showScreen(editorScreen);
+    setTimeout(function(){ editArea.focus(); }, 50);
+    startTimestamp = Date.now();
+    tick();
+    tickHandle = setInterval(tick, 250);
+  });
+
+  // ---------- editor / timer ----------
+  function tick(){
+    var elapsed = (Date.now() - startTimestamp) / 1000;
+    var remaining = limitSeconds - elapsed;
+    if (remaining <= 0){
+      timerReadout.textContent = formatCountdown(0);
+      finish(true);
+      return;
+    }
+    timerReadout.textContent = formatCountdown(remaining);
+    var ratio = remaining / limitSeconds;
+    timerReadout.classList.toggle('warn', ratio <= 0.25 && ratio > 0.08);
+    timerReadout.classList.toggle('danger', ratio <= 0.08);
+  }
+
+  function finish(isTimeUp){
+    if (finished) return;
+    finished = true;
+    if (tickHandle){ clearInterval(tickHandle); tickHandle = null; }
+    editArea.readOnly = true;
+    if (isTimeUp){
+      lockedBanner.classList.add('show');
+    }
+    var actualSeconds = isTimeUp ? limitSeconds : (Date.now() - startTimestamp) / 1000;
+    renderOutput(isTimeUp, actualSeconds);
+  }
+
+  finishBtn.addEventListener('click', function(){
+    finish(false);
+  });
+
+  // ---------- output screen ----------
+  var lastActualSeconds = 0;
+
+  function renderOutput(isTimeUp, actualSeconds){
+    lastActualSeconds = actualSeconds;
+    outputTitle.textContent = isTimeUp ? '⏰ 制限時間になりました' : '✓ 完成しました';
+    statLimit.textContent = formatFull(limitSeconds);
+    statUsed.textContent = formatFull(actualSeconds);
+    var text = editArea.value;
+    statChars.textContent = Array.from(text).length.toLocaleString('ja-JP');
+    outputText.textContent = text;
+    showScreen(outputScreen);
+  }
+
+  copyBtn.addEventListener('click', function(){
+    var text = editArea.value;
+    function ok(){ showToast('コピーしました'); }
+    function fail(){
+      try{
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok();
+      }catch(e){
+        showToast('コピーに失敗しました');
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(ok, fail);
+    } else {
+      fail();
+    }
+  });
+
+  restartBtn.addEventListener('click', function(){
+    showScreen(setupScreen);
+  });
+
+  // ---------- image export ----------
+  imageBtn.addEventListener('click', function(){
+    imageBtn.disabled = true;
+    var original = imageBtn.textContent;
+    imageBtn.textContent = '画像を生成中…';
+    generateImages().then(function(count){
+      showToast(count > 1 ? (count + '枚の画像を保存しました') : '画像を保存しました');
+    }).catch(function(err){
+      console.error(err);
+      showToast('画像の生成に失敗しました');
+    }).then(function(){
+      imageBtn.disabled = false;
+      imageBtn.textContent = original;
+    });
+  });
+
+  function loadFonts(){
+    var specs = [
+      '500 30px "Zen Kaku Gothic New"',
+      '700 24px "Zen Kaku Gothic New"',
+      '800 26px "JetBrains Mono"'
+    ];
+    var loaders = specs.map(function(spec){
+      try { return document.fonts.load(spec); } catch(e){ return Promise.resolve(); }
+    });
+    return Promise.all(loaders).then(function(){ return document.fonts.ready; });
+  }
+
+  function downloadCanvas(canvas, filename){
+    return new Promise(function(resolve){
+      canvas.toBlob(function(blob){
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function(){ URL.revokeObjectURL(url); resolve(); }, 200);
+      }, 'image/png');
+    });
+  }
+
+  function generateImages(){
+    return loadFonts().then(function(){
+      var text = editArea.value || '(本文なし)';
+      var W = 1080;
+      var H = 1920; /* fixed 9:16 portrait, like a phone screen */
+      var PAD = 64;
+      var HEADER_H = 104;
+      var lineHeight = 70;
+      var bodyFontSize = 42;
+      var bodyFont = '500 ' + bodyFontSize + 'px "Zen Kaku Gothic New", sans-serif';
+      var maxTextWidth = W - PAD * 2;
+
+      var measureCanvas = document.createElement('canvas');
+      var mctx = measureCanvas.getContext('2d');
+      mctx.font = bodyFont;
+
+      // wrap text: respect explicit newlines, char-wrap for CJK safety
+      var rawLines = text.split('\n');
+      var wrapped = [];
+      rawLines.forEach(function(raw){
+        if (raw === ''){ wrapped.push(''); return; }
+        var cur = '';
+        var chars = Array.from(raw);
+        for (var i=0; i<chars.length; i++){
+          var test = cur + chars[i];
+          if (mctx.measureText(test).width > maxTextWidth && cur !== ''){
+            wrapped.push(cur);
+            cur = chars[i];
+          } else {
+            cur = test;
+          }
+        }
+        wrapped.push(cur);
+      });
+      if (wrapped.length === 0) wrapped.push('');
+
+      var contentAreaHeight = H - HEADER_H - PAD;
+      var linesPerPage = Math.max(1, Math.floor(contentAreaHeight / lineHeight));
+      var totalPages = Math.max(1, Math.ceil(wrapped.length / linesPerPage));
+
+      var limitLabel = formatFull(limitSeconds);
+      var usedLabel = formatFull(lastActualSeconds);
+
+      var chain = Promise.resolve();
+      for (var p = 0; p < totalPages; p++){
+        (function(p){
+          chain = chain.then(function(){
+            var pageLines = wrapped.slice(p*linesPerPage, (p+1)*linesPerPage);
+            var canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            var ctx = canvas.getContext('2d');
+
+            // white background, fixed 9:16 canvas
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, W, H);
+
+            // faint ruled lines across the writing area
+            ctx.strokeStyle = 'rgba(17,17,17,0.08)';
+            ctx.lineWidth = 1;
+            for (var ly = HEADER_H + lineHeight; ly < H; ly += lineHeight){
+              ctx.beginPath();
+              ctx.moveTo(0, ly + 0.5);
+              ctx.lineTo(W, ly + 0.5);
+              ctx.stroke();
+            }
+
+            // header: thin black rule at the bottom of the row
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(0, HEADER_H - 3, W, 3);
+
+            var midY = HEADER_H / 2;
+            ctx.textBaseline = 'middle';
+
+            // left cluster: limit + used, small, on one line
+            var cx = PAD;
+            ctx.font = '700 17px "Zen Kaku Gothic New", sans-serif';
+            ctx.fillStyle = '#6B6B6B';
+            ctx.fillText('制限', cx, midY); cx += ctx.measureText('制限').width + 8;
+            ctx.font = '800 23px "JetBrains Mono", monospace';
+            ctx.fillStyle = '#111111';
+            ctx.fillText(limitLabel, cx, midY); cx += ctx.measureText(limitLabel).width + 28;
+
+            ctx.font = '700 17px "Zen Kaku Gothic New", sans-serif';
+            ctx.fillStyle = '#6B6B6B';
+            ctx.fillText('使用', cx, midY); cx += ctx.measureText('使用').width + 8;
+            ctx.font = '800 23px "JetBrains Mono", monospace';
+            ctx.fillStyle = '#FF4B3E';
+            ctx.fillText(usedLabel, cx, midY);
+
+            // right: page number, small
+            var pageStr = (p+1) + '/' + totalPages;
+            ctx.font = '800 23px "JetBrains Mono", monospace';
+            ctx.fillStyle = '#111111';
+            ctx.textAlign = 'right';
+            ctx.fillText(pageStr, W - PAD, midY);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+
+            // body text
+            ctx.fillStyle = '#111111';
+            ctx.font = bodyFont;
+            var y = HEADER_H + 26;
+            pageLines.forEach(function(line){
+              ctx.fillText(line, PAD, y);
+              y += lineHeight;
+            });
+
+            var suffix = totalPages > 1 ? ('_' + (p+1) + 'of' + totalPages) : '';
+            return downloadCanvas(canvas, 'writing' + suffix + '.png');
+          });
+        })(p);
+      }
+      return chain.then(function(){ return totalPages; });
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
