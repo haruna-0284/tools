@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ブルべ行程計画ツール</title>
+<style id="printDyn"></style>
+<style>
+  :root{
+    --paper: #f6f3ea;
+    --paper-2: #efeadc;
+    --ink: #23282b;
+    --ink-soft: #5b6367;
+    --line: #d8d2bf;
+    --accent: #1f6f78;      /* ルート/水色系アクセント */
+    --accent-2: #b98b2a;    /* 関門スタンプ風ゴールド */
+    --danger: #b23a2e;
+    --danger-bg: #f7e3df;
+    --ok: #3c7a5a;
+    --ok-bg: #e3efe6;
+    --hotel-bg: #eae2f2;
+    --meal-bg: #f2ecd9;
+    --override-bg: #fdf0d0;
+    --radius: 3px;
+    font-size: 15px;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family: ui-sans-serif, "Hiragino Sans", "Yu Gothic", "Segoe UI", system-ui, sans-serif;
+    line-height:1.5;
+  }
+  .num{ font-variant-numeric: tabular-nums; font-feature-settings:"tnum" 1; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  header.app-header{
+    padding: 20px clamp(12px,3vw,32px) 10px;
+    border-bottom: 2px solid var(--ink);
+  }
+  header.app-header h1{
+    margin:0 0 2px;
+    font-size: 1.5rem;
+    letter-spacing: .01em;
+  }
+  header.app-header p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:.86rem;
+  }
+
+  main{
+    padding: 16px clamp(12px,3vw,32px) 60px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  .panel{
+    background: #fff;
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 14px;
+  }
+  .panel h2{
+    margin:0 0 10px;
+    font-size: .78rem;
+    color: var(--ink-soft);
+    font-weight:600;
+    letter-spacing:.04em;
+  }
+
+  .row-flex{ display:flex; flex-wrap:wrap; gap: 14px 22px; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:.72rem; color:var(--ink-soft); }
+  .field input[type=text], .field input[type=datetime-local]{
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    padding:6px 8px;
+    font-size:.9rem;
+    background: var(--paper);
+    color:var(--ink);
+    min-width: 170px;
+  }
+  .field input.narrow{ min-width: 100px; }
+
+  .btnbar{ display:flex; flex-wrap:wrap; gap:8px; margin-left:auto; }
+  button{
+    font: inherit;
+    cursor:pointer;
+    border:1px solid var(--ink);
+    background:#fff;
+    color:var(--ink);
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    font-size:.82rem;
+  }
+  button:hover{ background: var(--ink); color:#fff; }
+  button.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover{ background:#175359; }
+  button.ghost{ background:transparent; border-color:var(--line); color:var(--ink-soft); }
+  button.ghost:hover{ background:var(--paper-2); color:var(--ink); }
+  button.danger-outline{ border-color:var(--danger); color:var(--danger); background:#fff; }
+  button.danger-outline:hover{ background:var(--danger); color:#fff; }
+  button.icon{ padding: 3px 7px; font-size:.85rem; line-height:1; }
+
+  .colchips{ display:flex; flex-wrap:wrap; gap:6px 14px; }
+  .colchips label{
+    display:flex; align-items:center; gap:5px;
+    font-size:.8rem;
+    background: var(--paper);
+    border:1px solid var(--line);
+    padding: 4px 9px;
+    border-radius: 999px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .colchips input{ cursor:pointer; }
+
+  #validationMsg{
+    display:none;
+    margin-bottom:14px;
+    padding:10px 14px;
+    background: var(--danger-bg);
+    border:1px solid var(--danger);
+    color:var(--danger);
+    border-radius: var(--radius);
+    font-size:.85rem;
+  }
+  #validationMsg.show{ display:block; }
+
+  .table-scroll{
+    overflow-x:auto;
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    background:#fff;
+  }
+  table{
+    border-collapse: collapse;
+    width:100%;
+    min-width: 900px;
+  }
+  thead th{
+    position: sticky; top:0;
+    background: var(--ink);
+    color:#fff;
+    font-size:.72rem;
+    font-weight:600;
+    letter-spacing:.03em;
+    padding: 8px 8px;
+    text-align:left;
+    white-space:nowrap;
+    border-right: 1px solid rgba(255,255,255,.15);
+    z-index:2;
+  }
+  tbody td{
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    vertical-align: middle;
+    font-size:.85rem;
+    white-space:nowrap;
+  }
+  /* 奇数日=暖色 / 偶数日=寒色 */
+  tbody tr.dayodd{ --hd:#f4d6b4; --body:#fff8ef; --mid:#fdebd3; --meal:#f3b04f; --hotel:#ee8a70; }
+  tbody tr.dayeven{ --hd:#cde2ee; --body:#f1f8fc; --mid:#dcecf6; --meal:#6fc4b8; --hotel:#8f9fe6; }
+  tbody tr td{ background: var(--body); }
+  tbody tr td[data-col="conbini"], tbody tr td[data-col="type"], tbody tr td[data-col="place"]{ background: var(--hd); font-weight:600; }
+  tbody tr.type-BREAKFAST td, tbody tr.type-LUNCH td, tbody tr.type-DINNER td{ background: var(--mid); }
+  tbody tr.type-HOTEL td{ background: var(--mid); }
+  tbody tr.type-BREAKFAST td[data-col="conbini"], tbody tr.type-BREAKFAST td[data-col="type"], tbody tr.type-BREAKFAST td[data-col="place"],
+  tbody tr.type-LUNCH td[data-col="conbini"], tbody tr.type-LUNCH td[data-col="type"], tbody tr.type-LUNCH td[data-col="place"],
+  tbody tr.type-DINNER td[data-col="conbini"], tbody tr.type-DINNER td[data-col="type"], tbody tr.type-DINNER td[data-col="place"]{ background: var(--meal); }
+  tbody tr.type-HOTEL td[data-col="conbini"], tbody tr.type-HOTEL td[data-col="type"], tbody tr.type-HOTEL td[data-col="place"]{ background: var(--hotel); }
+  tbody tr.type-START td, tbody tr.type-GOAL td{ font-weight:600; }
+  tbody tr:hover{ filter: brightness(0.985); }
+  td.spacer{ background: var(--hd, transparent); }
+  tr.overall-summary td.spacer{ background: var(--ink); }
+
+  select, input[type=number], input.cell-text{
+    font: inherit;
+    font-size:.83rem;
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:4px 5px;
+    background:#fff;
+    width: 100%;
+  }
+  input[type=number]{ width: 78px; }
+  input.stay-input{ width: 62px; }
+  input.place-input{ width: 130px; }
+  select.type-select{ width: 108px; }
+  select:disabled, input:disabled{ background: var(--paper-2); color:#9a9488; }
+
+  .conbini-cell{ display:flex; align-items:center; gap:6px; }
+  .conbini-no{
+    display:inline-block; min-width:18px; text-align:center;
+    background: var(--accent-2); color:#fff; border-radius:999px;
+    font-size:.68rem; padding:1px 5px; font-weight:700;
+  }
+
+  .arrival-cell{ display:flex; align-items:center; gap:6px; }
+  .arrival-clock{ white-space:nowrap; }
+  .badge-manual{
+    font-size:.62rem; background:var(--override-bg); border:1px solid var(--accent-2);
+    color:#8a6816; border-radius:3px; padding:0 4px;
+  }
+  .edit-arrival-input{ width: 74px; }
+  .arrival-cell.overridden{ background: var(--override-bg); }
+
+  .actions-cell{ white-space:nowrap; }
+  .actions-cell button{ margin-right:2px; }
+
+  tr.day-summary td{
+    background: var(--hd, #fbf8ef);
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    font-size:.82rem;
+    padding: 8px 12px;
+  }
+  tr.day-summary .summary-line{
+    display:flex; flex-wrap:wrap; gap: 4px 22px; align-items:baseline;
+  }
+  tr.day-summary .summary-line b{ font-size:.86rem; }
+  tr.day-summary .summary-item span.label{ color:var(--ink-soft); margin-right:4px; }
+
+  tr.overall-summary td{
+    background: var(--ink);
+    color:#fff;
+    padding: 10px 12px;
+  }
+  tr.overall-summary .summary-line{ display:flex; flex-wrap:wrap; gap:6px 24px; }
+  tr.overall-summary .summary-item span.label{ color:#c8cdd0; margin-right:4px; }
+
+  .limit-over{ color:var(--danger); font-weight:700; }
+  .limit-ok{ color:var(--ok); }
+  .limit-note{ font-size:.68rem; display:block; }
+
+  .insert-row-btn-wrap{ text-align:center; padding: 6px 0; }
+
+  footer.hint{
+    margin-top: 18px;
+    font-size:.76rem;
+    color: var(--ink-soft);
+  }
+
+  /* ---- 枠サイズは据え置き、文字だけやや大きめ ---- */
+  tbody td{ font-size:1rem; }
+  thead th{ font-size:.8rem; }
+  select, input[type=number], input.cell-text{ font-size:1rem; }
+  input[type=number]{ width:86px; }
+  input.stay-input{ width:68px; }
+  input.place-input{ width:142px; }
+  select.type-select{ width:114px; }
+  .edit-arrival-input{ width:80px; }
+  .colchips label{ font-size:.88rem; }
+  .field label{ font-size:.78rem; }
+  .summary-item span.label{ color:var(--ink); margin-right:6px; }
+  .summary-item span.val{ font-weight:700; }
+  tr.overall-summary .summary-line b{ font-size:1.1rem; }
+  tr.overall-summary .summary-item span.label{ color:#fff; }
+
+  /* 日の区切り（太線）・右端の線 */
+  tbody tr.day-start td{ border-top:3px solid var(--ink); }
+  tbody tr.day-end td{ border-bottom:3px solid var(--ink); }
+  tr.overall-summary td{ border-top:3px solid var(--ink); }
+  tbody td.pre-sum{ border-right:2px solid var(--ink); }
+  tbody td.edge-r, thead th.edge-r{ border-right:2px solid var(--ink); }
+
+  /* 1日のまとめ（右端列） */
+  tbody td.day-cell.day-cell{ background: var(--hd); vertical-align:top; padding:8px 10px; border-left:2px solid var(--ink); }
+  .day-cell .day-title{ font-weight:700; font-size:1.1rem; margin-bottom:2px; }
+  .day-cell .day-item{ display:flex; justify-content:space-between; gap:12px; line-height:1.55; }
+  .day-cell .day-item .label{ color:var(--ink); }
+  .day-cell .day-item .val{ font-weight:700; }
+
+  /* ---- 印刷用 ---- */
+  *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @media print{
+    html, body, main{ background:#fff !important; }
+    body{ font-size:15px; }
+    header.app-header, .no-print, #validationMsg, footer.hint, th.col-action{ display:none !important; }
+    main{ padding:0; max-width:none; margin:0; }
+    .table-scroll{ border:none; overflow:visible; background:none; }
+    table{ min-width:0; width:100%; }
+    thead th{ position:static; background:#3b4247; color:#fff; border:1px solid #666; padding:4px 5px; font-size:13px; }
+    tbody td{ border:1px solid #888; padding:3px 6px; font-size:15px; }
+    tbody tr{ page-break-inside:avoid; }
+    tbody tr:hover{ filter:none; }
+    select, input{ border:none !important; background:transparent !important; padding:0 !important; color:#000; font-size:15px; }
+    select{ -webkit-appearance:none; -moz-appearance:none; appearance:none; width:auto !important; font-weight:600; }
+    input[type=number]{ -moz-appearance:textfield; width:66px; }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+    input.stay-input{ width:60px; }
+    input.place-input{ width:auto; min-width:60px; field-sizing:content; }
+    /* コンビニ: 数字のみ・枠外 */
+    th[data-col="conbini"]{ background:transparent !important; color:transparent !important; border:none !important; }
+    td[data-col="conbini"], td.spacer{ background:transparent !important; border:none !important; text-align:right; }
+    td[data-col="conbini"] input{ display:none; }
+    th[data-col="conbini"]{ font-size:0 !important; padding:0 !important; width:1%; }
+    td[data-col="conbini"]{ width:1%; padding:3px 6px 3px 0 !important; }
+    tbody td.day-cell.day-cell{ font-size:14px; padding:4px 8px; border-left:1.5px solid #000; }
+    .day-cell .day-title{ font-size:16px; }
+    table{ width:calc(100% - 3px); }
+    /* 日の区切り: 前の行の下線と次の行の上線の両方を太い黒線にする（どちらが優先されても黒になる） */
+    tbody tr.day-start td{ border-top:4px solid #000; }
+    tbody tr.day-end td{ border-bottom:4px solid #000; }
+    tbody td.day-cell.day-cell{ border-bottom:4px solid #000; }
+    tbody td.pre-sum{ border-right:1.5px solid #000; }
+    tbody td.edge-r, thead th.edge-r{ border-right:1.5px solid #000; }
+    .conbini-cell{ justify-content:flex-end; }
+    .conbini-no{ background:none; color:#000; font-size:18px; font-weight:700; padding:0; min-width:0; }
+    tr.day-summary td{ border-top:1.5px solid #000; border-bottom:1.5px solid #000; padding:4px 8px; }
+    tr.overall-summary td{ background:#d9dcde; color:#000; border-top:4px solid #000; }
+    tr.overall-summary .summary-item span.label{ color:#000; }
+    tr.day-summary{ page-break-after:avoid; }
+    tr.day-summary td{ font-size:16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>ブルべ行程計画ツール</h1>
+  <p>スタート・PC・食事・ホテル・GOALを並べて、到着/出発時刻や走行ペースを自動計算します。</p>
+</header>
+
+<main>
+
+  <div class="panel no-print">
+    <h2>基本設定</h2>
+    <div class="row-flex">
+      <div class="field">
+        <label for="startTime">スタート日時</label>
+        <input type="datetime-local" id="startTime">
+      </div>
+      <div class="field">
+        <label for="goalLimit">制限時間（スタートからゴールまで / 例 84:00）</label>
+        <input type="text" id="goalLimit" class="narrow" placeholder="84:00">
+      </div>
+      <div class="field">
+        <label for="printScale">印刷倍率(%)</label>
+        <input type="text" id="printScale" class="narrow" value="75">
+      </div>
+      <div class="field">
+        <label for="printOrient">用紙の向き</label>
+        <select id="printOrient" style="width:auto">
+          <option value="landscape">横</option>
+          <option value="portrait">縦</option>
+        </select>
+      </div>
+      <div class="btnbar">
+        <button class="ghost" id="btnSample">サンプルを読み込む</button>
+        <button class="danger-outline" id="btnClear">全行削除</button>
+        <button class="ghost" id="btnExport">JSON書き出し</button>
+        <button class="ghost" id="btnImportTrigger">JSON読み込み</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none">
+        <button class="primary" id="btnPrint">印刷 / PDF保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel no-print">
+    <h2>表示する項目（印刷前に不要な列を非表示にできます）</h2>
+    <div class="colchips" id="colChips"></div>
+  </div>
+
+  <div class="panel no-print">
+    <h2>1日のまとめに表示する項目</h2>
+    <div class="colchips" id="sumChips"></div>
+  </div>
+
+  <div id="validationMsg"></div>
+
+  <div class="table-scroll">
+    <table id="planTable">
+      <thead><tr id="theadRow"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="insert-row-btn-wrap no-print">
+    <button class="ghost" id="btnAddBottom">＋ 一番下に行を追加</button>
+  </div>
+
+  <footer class="hint no-print">
+    ・「到着時刻」の✎ボタンでスタートからの経過時間を直接指定し、以降の計算に反映できます（制限時間超過時の調整用）。✎の横の×で自動計算に戻せます。<br>
+    ・コンビニの通し番号は、START〜ホテル／ホテル〜ホテル／ホテル〜GOALの1日単位でリセットされます。<br>
+    ・印刷時は操作列や入力の枠線が自動的に消え、A4横向きに最適化されます。
+  </footer>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------------------------------------------------
+  // 定数
+  // ---------------------------------------------------------
+  const TYPES = ["START","PC","BREAKFAST","LUNCH","DINNER","HOTEL","GOAL"];
+  const TYPE_LABEL = {START:"START", PC:"PC", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
+  const TYPE_SHORT = {START:"START", PC:"PC", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
+  const NO_PLACE = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
+  const NO_DIST  = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
+  const IS_TIMED = t => t==="PC" || t==="HOTEL" || t==="GOAL"; // 区間距離/目標時速から所要時間を計算する種別
+  const IS_BOUNDARY = t => t==="START" || t==="HOTEL" || t==="GOAL"; // 1日の区切り
+
+  const COLS = [
+    {key:"conbini",  label:"コンビニ"},
+    {key:"type",     label:"種別"},
+    {key:"place",    label:"場所"},
+    {key:"cumDist",  label:"累計距離(km)"},
+    {key:"segDist",  label:"区間距離(km)"},
+    {key:"speed",    label:"目標時速(km/h)"},
+    {key:"duration", label:"所要時間"},
+    {key:"arrival",  label:"到着時刻"},
+    {key:"elapsed",  label:"経過時間"},
+    {key:"stay",     label:"滞在時間"},
+    {key:"departure",label:"出発時刻"},
+    {key:"daySummary",label:"1日のまとめ"}
+  ];
+
+  // ---------------------------------------------------------
+  // 状態
+  // ---------------------------------------------------------
+  let idSeq = 1;
+  const newId = () => "r" + (idSeq++);
+
+  function newRow(type){
+    return {
+      id: newId(),
+      type: type || "PC",
+      place: "",
+      isConbini: false,
+      segDist: 0,
+      speed: (type==="START" ? 0 : 20),
+      stay: "0:00",
+      arrivalOverride: null // 分（スタートからの経過分）。nullなら自動計算
+    };
+  }
+
+  let rows = [ newRow("START"), newRow("GOAL") ];
+
+  const SUMS = [
+    {key:"dist",   label:"走行距離"},
+    {key:"time",   label:"走行時間"},
+    {key:"travel", label:"走行時間(休み除く)"},
+    {key:"gross",  label:"グロス"},
+    {key:"net",    label:"ネット"}
+  ];
+  const sumVis = {};
+  SUMS.forEach(x => sumVis[x.key] = true);
+
+  const colVis = {};
+  COLS.forEach(c => colVis[c.key] = true);
+
+  const editingArrivalIds = new Set();
+
+  // ---------------------------------------------------------
+  // ユーティリティ
+  // ---------------------------------------------------------
+  function parseHM(str){
+    if(str===null || str===undefined) return 0;
+    const s = String(str).trim();
+    if(s === "") return 0;
+    const m = s.match(/^(\d{1,4}):([0-5]?\d)$/);
+    if(!m) return null;
+    return parseInt(m[1],10)*60 + parseInt(m[2],10);
+  }
+  function fmtHM(totalMinutes){
+    if(totalMinutes===null || totalMinutes===undefined || isNaN(totalMinutes)) return "-";
+    const sign = totalMinutes < 0 ? "-" : "";
+    const abs = Math.round(Math.abs(totalMinutes));
+    const h = Math.floor(abs/60), m = abs%60;
+    return sign + h + ":" + String(m).padStart(2,"0");
+  }
+  function fmtDist(km){
+    if(km===null || km===undefined || isNaN(km)) return "-";
+    return km.toFixed(1);
+  }
+  function fmtSpeed(v){
+    if(v===null || v===undefined || isNaN(v)) return "-";
+    return v.toFixed(1);
+  }
+  function getStartDate(){
+    const v = document.getElementById("startTime").value;
+    if(!v) return null;
+    const d = new Date(v);
+    if(isNaN(d.getTime())) return null;
+    return d;
+  }
+  function fmtClock(baseDate, offsetMinutes){
+    if(!baseDate || offsetMinutes===null || offsetMinutes===undefined || isNaN(offsetMinutes)) return "-";
+    const d = new Date(baseDate.getTime() + offsetMinutes*60000);
+    const w = ["日","月","火","水","木","金","土"][d.getDay()];
+    const mm = d.getMonth()+1, dd = d.getDate();
+    const hh = String(d.getHours()).padStart(2,"0"), mi = String(d.getMinutes()).padStart(2,"0");
+    return mm + "/" + dd + "(" + w + ") " + hh + ":" + mi;
+  }
+
+  // ---------------------------------------------------------
+  // 計算
+  // ---------------------------------------------------------
+  function computeAll(){
+    const boundaryIdx = [];
+    rows.forEach((r,i)=>{ if(IS_BOUNDARY(r.type)) boundaryIdx.push(i); });
+    const dayStartSet = new Set();
+    for(let i=0;i<boundaryIdx.length-1;i++) dayStartSet.add(boundaryIdx[i]);
+    if(rows.length) dayStartSet.add(0);
+
+    let cumDist = 0;
+    let prevDeparture = 0;
+    let conbiniCounter = 0;
+
+    rows.forEach((r,i)=>{
+      if(dayStartSet.has(i)) conbiniCounter = 0;
+
+      // 所要時間
+      let duration = 0, durationValid = true;
+      if(IS_TIMED(r.type)){
+        const sd = Number(r.segDist)||0;
+        const sp = Number(r.speed)||0;
+        if(sd > 0 && sp > 0){ duration = sd/sp*60; }
+        else if(sd > 0 && sp <= 0){ duration = 0; durationValid = false; }
+        else { duration = 0; }
+      }
+
+      // 到着時刻（分, スタートからの経過）
+      let arrival;
+      let manual = false;
+      if(r.arrivalOverride !== null && r.arrivalOverride !== undefined){
+        arrival = r.arrivalOverride;
+        manual = true;
+      } else if(i === 0){
+        arrival = 0;
+      } else {
+        arrival = prevDeparture + duration;
+      }
+
+      const noStay = (r.type==="START" || r.type==="GOAL");
+      const stayParsed = noStay ? 0 : parseHM(r.stay);
+      const stayMin = (stayParsed===null) ? 0 : stayParsed;
+      const stayInvalid = (stayParsed===null);
+
+      const departure = arrival + stayMin;
+
+      if(!NO_DIST(r.type)){
+        cumDist += (Number(r.segDist)||0);
+      }
+
+      let conbiniNo = null;
+      if(r.isConbini){
+        conbiniCounter++;
+        conbiniNo = conbiniCounter;
+      }
+
+      r._c = { duration, durationValid, arrival, manual, stayMin, stayInvalid, departure, cumDist, conbiniNo };
+      prevDeparture = departure;
+    });
+
+    const days = [];
+    for(let i=0;i<boundaryIdx.length-1;i++){
+      const s = boundaryIdx[i], e = boundaryIdx[i+1];
+      const distTotal = rows[e]._c.cumDist - rows[s]._c.cumDist;
+      const timeTotal = rows[e]._c.arrival - rows[s]._c.departure;
+      let travelOnly = 0;
+      for(let k=s+1;k<=e;k++) travelOnly += rows[k]._c.duration;
+      const gross = timeTotal > 0 ? distTotal/(timeTotal/60) : null;
+      const net = travelOnly > 0 ? distTotal/(travelOnly/60) : null;
+      days.push({ startIdx:s, endIdx:e, distTotal, timeTotal, travelOnly, gross, net,
+                  label: TYPE_SHORT[rows[s].type]+" → "+TYPE_SHORT[rows[e].type] });
+    }
+
+    let overall = null;
+    if(boundaryIdx.length >= 2 && rows[boundaryIdx[0]].type==="START" && rows[boundaryIdx[boundaryIdx.length-1]].type==="GOAL"){
+      const s = boundaryIdx[0], e = boundaryIdx[boundaryIdx.length-1];
+      const distTotal = rows[e]._c.cumDist - rows[s]._c.cumDist;
+      const timeTotal = rows[e]._c.arrival - rows[s]._c.departure;
+      let travelOnly = 0;
+      for(let k=s+1;k<=e;k++) travelOnly += rows[k]._c.duration;
+      overall = { distTotal, timeTotal, travelOnly,
+        gross: timeTotal>0 ? distTotal/(timeTotal/60) : null,
+        net: travelOnly>0 ? distTotal/(travelOnly/60) : null,
+        goalElapsed: rows[e]._c.arrival };
+    }
+
+    rows.forEach(r=>{ r._c.dayIdx = 0; });
+    days.forEach((d,i)=>{ for(let k=d.startIdx+1;k<=d.endIdx;k++) rows[k]._c.dayIdx = i; });
+
+    return { boundaryIdx, days, overall };
+  }
+
+  // ---------------------------------------------------------
+  // 検証
+  // ---------------------------------------------------------
+  function validate(){
+    const msgs = [];
+    if(rows.length===0){ msgs.push("行がありません。行を追加してください。"); }
+    else{
+      if(rows[0].type !== "START") msgs.push("最初の行の種別は START にしてください。");
+      if(rows[rows.length-1].type !== "GOAL") msgs.push("最後の行の種別は GOAL にしてください。");
+    }
+    const box = document.getElementById("validationMsg");
+    if(msgs.length){
+      box.innerHTML = msgs.map(m=>"・"+m).join("<br>");
+      box.classList.add("show");
+    } else {
+      box.classList.remove("show");
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 描画：列トグルパネル
+  // ---------------------------------------------------------
+  function renderColChips(){
+    const wrap = document.getElementById("colChips");
+    wrap.innerHTML = "";
+    COLS.forEach(c=>{
+      const label = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = colVis[c.key];
+      cb.addEventListener("change", ()=>{ colVis[c.key] = cb.checked; renderTable(); });
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(c.label));
+      wrap.appendChild(label);
+    });
+  }
+
+  function renderSumChips(){
+    const wrap = document.getElementById("sumChips");
+    wrap.innerHTML = "";
+    SUMS.forEach(x=>{
+      const label = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = sumVis[x.key];
+      cb.addEventListener("change", ()=>{ sumVis[x.key] = cb.checked; renderTable(); });
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(x.label));
+      wrap.appendChild(label);
+    });
+  }
+
+  // ---------------------------------------------------------
+  // 描画：テーブル
+  // ---------------------------------------------------------
+  function visibleCols(){ return COLS.filter(c=>colVis[c.key]); }
+
+  function renderThead(){
+    const tr = document.getElementById("theadRow");
+    tr.innerHTML = "";
+    const thAction = document.createElement("th");
+    thAction.className = "col-action";
+    thAction.textContent = "操作";
+    tr.appendChild(thAction);
+    visibleCols().forEach(c=>{
+      const th = document.createElement("th");
+      th.textContent = c.label;
+      th.setAttribute("data-col", c.key);
+      tr.appendChild(th);
+    });
+    if(tr.children.length > 1) tr.lastElementChild.classList.add("edge-r");
+  }
+
+  function makeActionsCell(idx){
+    const td = document.createElement("td");
+    td.className = "actions-cell no-print";
+
+    const up = document.createElement("button");
+    up.className = "icon"; up.title="上に移動"; up.textContent = "↑";
+    up.disabled = idx===0;
+    up.addEventListener("click", ()=>{
+      if(idx>0){ const t = rows[idx-1]; rows[idx-1]=rows[idx]; rows[idx]=t; renderTable(); }
+    });
+
+    const down = document.createElement("button");
+    down.className = "icon"; down.title="下に移動"; down.textContent = "↓";
+    down.disabled = idx===rows.length-1;
+    down.addEventListener("click", ()=>{
+      if(idx<rows.length-1){ const t = rows[idx+1]; rows[idx+1]=rows[idx]; rows[idx]=t; renderTable(); }
+    });
+
+    const ins = document.createElement("button");
+    ins.className = "icon"; ins.title="この下に行を追加"; ins.textContent = "＋";
+    ins.addEventListener("click", ()=>{
+      rows.splice(idx+1, 0, newRow("PC"));
+      renderTable();
+    });
+
+    const del = document.createElement("button");
+    del.className = "icon"; del.title="この行を削除"; del.textContent = "－";
+    del.addEventListener("click", ()=>{
+      if(rows.length<=1) return;
+      rows.splice(idx,1);
+      renderTable();
+    });
+
+    [up,down,ins,del].forEach(b=>td.appendChild(b));
+    return td;
+  }
+
+  function makeCell(key, row, idx, baseDate, limitMin){
+    const td = document.createElement("td");
+    td.setAttribute("data-col", key);
+    const c = row._c;
+    const meal = NO_PLACE(row.type);
+    const isStart = row.type === "START";
+
+    switch(key){
+
+      case "conbini": {
+        const wrap = document.createElement("div");
+        wrap.className = "conbini-cell";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = row.isConbini;
+        cb.addEventListener("change", ()=>{ row.isConbini = cb.checked; renderTable(); });
+        wrap.appendChild(cb);
+        if(c.conbiniNo){
+          const badge = document.createElement("span");
+          badge.className = "conbini-no";
+          badge.textContent = c.conbiniNo;
+          wrap.appendChild(badge);
+        }
+        td.appendChild(wrap);
+        break;
+      }
+
+      case "type": {
+        const sel = document.createElement("select");
+        sel.className = "type-select";
+        TYPES.forEach(t=>{
+          const opt = document.createElement("option");
+          opt.value = t; opt.textContent = TYPE_LABEL[t];
+          if(row.type===t) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener("change", ()=>{
+          row.type = sel.value;
+          if(NO_PLACE(row.type)) row.place = "";
+          if(row.type==="START"){ row.segDist = 0; row.speed = 0; }
+          else if(!(row.speed>0)) row.speed = 20;
+          if(row.type==="HOTEL"){
+            const i = rows.indexOf(row);
+            const next = rows[i+1];
+            if(!next || IS_BOUNDARY(next.type)) rows.splice(i+1, 0, newRow("PC"));
+          }
+          renderTable();
+        });
+        td.appendChild(sel);
+        break;
+      }
+
+      case "place": {
+        if(meal){
+          // 食事の場合は何も表示しない
+        } else {
+          const inp = document.createElement("input");
+          inp.type = "text"; inp.className = "cell-text place-input";
+          inp.value = row.place;
+          inp.addEventListener("change", ()=>{ row.place = inp.value; });
+          inp.addEventListener("keydown", e=>{ if(e.key==="Enter") inp.blur(); });
+          td.appendChild(inp);
+        }
+        break;
+      }
+
+      case "cumDist": {
+        const span = document.createElement("span"); span.className="num";
+        span.textContent = fmtDist(c.cumDist) + " km";
+        td.appendChild(span);
+        break;
+      }
+
+      case "segDist": {
+        if(meal){
+          td.textContent = "-";
+        } else {
+          const inp = document.createElement("input");
+          inp.type = "number"; inp.step = "0.1"; inp.min="0";
+          inp.value = row.segDist;
+          inp.disabled = isStart;
+          inp.addEventListener("change", ()=>{ row.segDist = parseFloat(inp.value)||0; renderTable(); });
+          td.appendChild(inp);
+        }
+        break;
+      }
+
+      case "speed": {
+        if(meal){
+          td.textContent = "-";
+        } else {
+          const inp = document.createElement("input");
+          inp.type = "number"; inp.step="0.1"; inp.min="0";
+          inp.value = row.speed;
+          inp.disabled = isStart;
+          if(!c.durationValid){ inp.style.borderColor = "var(--danger)"; inp.title = "目標時速が未設定のため所要時間を計算できません"; }
+          inp.addEventListener("change", ()=>{ row.speed = parseFloat(inp.value)||0; renderTable(); });
+          td.appendChild(inp);
+        }
+        break;
+      }
+
+      case "duration": {
+        if(!IS_TIMED(row.type)){
+          td.textContent = "-";
+        } else {
+          const span = document.createElement("span"); span.className="num";
+          span.textContent = c.durationValid ? fmtHM(c.duration) : "⚠未設定";
+          if(!c.durationValid) span.style.color = "var(--danger)";
+          td.appendChild(span);
+        }
+        break;
+      }
+
+      case "arrival": {
+        const wrap = document.createElement("div");
+        wrap.className = "arrival-cell" + (c.manual ? " overridden" : "");
+        if(editingArrivalIds.has(row.id)){
+          const inp = document.createElement("input");
+          inp.type = "text"; inp.className = "edit-arrival-input num";
+          inp.placeholder = "例 5:30";
+          inp.value = row.arrivalOverride!==null ? fmtHM(row.arrivalOverride) : fmtHM(c.arrival);
+          inp.addEventListener("keydown", e=>{
+            if(e.key==="Enter"){
+              const v = parseHM(inp.value);
+              if(v!==null) row.arrivalOverride = v;
+              editingArrivalIds.delete(row.id);
+              renderTable();
+            } else if(e.key==="Escape"){
+              editingArrivalIds.delete(row.id);
+              renderTable();
+            }
+          });
+          const ok = document.createElement("button");
+          ok.className="icon no-print"; ok.textContent="✓"; ok.title="確定（スタートからの経過時間で指定）";
+          ok.addEventListener("click", ()=>{
+            const v = parseHM(inp.value);
+            if(v!==null) row.arrivalOverride = v;
+            editingArrivalIds.delete(row.id);
+            renderTable();
+          });
+          wrap.appendChild(inp); wrap.appendChild(ok);
+          setTimeout(()=>inp.focus(), 0);
+        } else {
+          const span = document.createElement("span");
+          span.className = "arrival-clock num";
+          span.textContent = fmtClock(baseDate, c.arrival);
+          wrap.appendChild(span);
+          if(c.manual){
+            const b = document.createElement("span"); b.className="badge-manual"; b.textContent="手動";
+            wrap.appendChild(b);
+            const reset = document.createElement("button");
+            reset.className="icon no-print"; reset.title="自動計算に戻す"; reset.textContent="×";
+            reset.addEventListener("click", ()=>{ row.arrivalOverride = null; renderTable(); });
+            wrap.appendChild(reset);
+          }
+          if(!isStart){
+            const edit = document.createElement("button");
+            edit.className="icon no-print"; edit.title="到着時刻を手動修正（経過時間で指定）"; edit.textContent="✎";
+            edit.addEventListener("click", ()=>{ editingArrivalIds.add(row.id); renderTable(); });
+            wrap.appendChild(edit);
+          }
+        }
+        td.appendChild(wrap);
+
+        if(row.type==="GOAL" && limitMin!==null){
+          const note = document.createElement("span");
+          note.className = "limit-note";
+          const diff = limitMin - c.arrival;
+          if(diff < 0){ note.classList.add("limit-over"); note.textContent = "制限超過 +"+fmtHM(-diff); }
+          else{ note.classList.add("limit-ok"); note.textContent = "残り "+fmtHM(diff); }
+          td.appendChild(note);
+        }
+        break;
+      }
+
+      case "elapsed": {
+        const span = document.createElement("span"); span.className="num";
+        span.textContent = fmtHM(c.arrival);
+        td.appendChild(span);
+        break;
+      }
+
+      case "stay": {
+        const inp = document.createElement("input");
+        inp.type = "text"; inp.className = "cell-text stay-input num";
+        const noStay = (row.type==="START" || row.type==="GOAL");
+        inp.value = noStay ? "" : row.stay;
+        inp.placeholder = noStay ? "" : "0:00";
+        inp.disabled = noStay;
+        if(c.stayInvalid) inp.style.borderColor = "var(--danger)";
+        inp.addEventListener("change", ()=>{ row.stay = inp.value; renderTable(); });
+        inp.addEventListener("keydown", e=>{ if(e.key==="Enter") inp.blur(); });
+        td.appendChild(inp);
+        break;
+      }
+
+      case "departure": {
+        const span = document.createElement("span"); span.className="num";
+        span.textContent = fmtClock(baseDate, c.departure);
+        td.appendChild(span);
+        break;
+      }
+    }
+    return td;
+  }
+
+  function addSummarySpacer(tr, td){
+    const act = document.createElement("td"); act.className = "spacer no-print"; tr.appendChild(act);
+    let n = visibleCols().length;
+    if(colVis.conbini){
+      const sp = document.createElement("td"); sp.className = "spacer"; tr.appendChild(sp);
+      n -= 1;
+    }
+    td.colSpan = Math.max(1, n);
+  }
+
+  function summaryItemsFor(o){
+    const vals = {
+      dist:   fmtDist(o.distTotal) + " km",
+      time:   fmtHM(o.timeTotal),
+      travel: fmtHM(o.travelOnly),
+      gross:  o.gross!==null ? o.gross.toFixed(1) + " km/h" : "-",
+      net:    o.net!==null ? o.net.toFixed(1) + " km/h" : "-"
+    };
+    return SUMS.filter(x=>sumVis[x.key]).map(x=>[x.label, vals[x.key]]);
+  }
+
+  function appendSummaryItems(line, items){
+    items.forEach(([label,val])=>{
+      const it = document.createElement("span");
+      it.className = "summary-item";
+      const l = document.createElement("span"); l.className = "label"; l.textContent = label;
+      const v = document.createElement("span"); v.className = "val"; v.textContent = val;
+      it.appendChild(l); it.appendChild(v);
+      line.appendChild(it);
+    });
+  }
+
+  function makeDaySummaryCell(day, dayIndex, span){
+    const td = document.createElement("td");
+    td.className = "day-cell";
+    td.rowSpan = span;
+    td.setAttribute("data-col", "daySummary");
+    const title = document.createElement("div");
+    title.className = "day-title";
+    title.textContent = "Day " + (dayIndex+1);
+    td.appendChild(title);
+    summaryItemsFor(day).forEach(([label,val])=>{
+      const it = document.createElement("div");
+      it.className = "day-item";
+      const l = document.createElement("span"); l.className = "label"; l.textContent = label;
+      const v = document.createElement("span"); v.className = "val"; v.textContent = val;
+      it.appendChild(l); it.appendChild(v);
+      td.appendChild(it);
+    });
+    return td;
+  }
+
+  function makeOverallSummaryRow(overall, limitMin){
+    const tr = document.createElement("tr");
+    tr.className = "overall-summary";
+    const td = document.createElement("td");
+    td.className = "edge-r";
+    addSummarySpacer(tr, td);
+    const line = document.createElement("div");
+    line.className = "summary-line";
+    const title = document.createElement("b");
+    title.textContent = "全区間合計";
+    line.appendChild(title);
+    appendSummaryItems(line, summaryItemsFor(overall));
+
+    if(limitMin!==null){
+      const it = document.createElement("span");
+      it.className = "summary-item";
+      const l = document.createElement("span"); l.className = "label";
+      l.textContent = "制限時間(" + fmtHM(limitMin) + ")";
+      const v = document.createElement("span"); v.className = "val";
+      const diff = limitMin - overall.goalElapsed;
+      if(diff < 0){ v.classList.add("limit-over"); v.textContent = "超過 +" + fmtHM(-diff); }
+      else{ v.textContent = "残り " + fmtHM(diff); }
+      it.appendChild(l); it.appendChild(v);
+      line.appendChild(it);
+    }
+    td.appendChild(line);
+    tr.appendChild(td);
+    return tr;
+  }
+
+  function renderTable(){
+    validate();
+    const { days, overall } = computeAll();
+    const baseDate = getStartDate();
+    const limitMin = parseHM(document.getElementById("goalLimit").value);
+    const limitMinFinal = (limitMin===null) ? null : limitMin;
+
+    renderThead();
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+
+    const dayHeaderMap = new Map(); // その日の最初の行のindex -> {d,i}
+    const coveredSet = new Set();
+    days.forEach((d,i)=>{
+      const first = (i===0) ? 0 : d.startIdx+1;
+      dayHeaderMap.set(first, {d, i, span: d.endIdx - first + 1});
+      for(let k=first+1; k<=d.endIdx; k++) coveredSet.add(k);
+    });
+
+    rows.forEach((row, idx)=>{
+      const tr = document.createElement("tr");
+      tr.className = "type-" + row.type + " " + (row._c.dayIdx%2===0 ? "dayodd" : "dayeven")
+        + ((dayHeaderMap.has(idx) && dayHeaderMap.get(idx).i > 0) ? " day-start" : "")
+        + ((dayHeaderMap.has(idx+1) && dayHeaderMap.get(idx+1).i > 0) ? " day-end" : "");
+      tr.appendChild(makeActionsCell(idx));
+      let lastTd = null;
+      visibleCols().forEach(c=>{
+        if(c.key === "daySummary"){
+          if(lastTd) lastTd.classList.add("pre-sum");
+          let cell = null;
+          if(dayHeaderMap.has(idx)){
+            const info = dayHeaderMap.get(idx);
+            cell = makeDaySummaryCell(info.d, info.i, info.span);
+          } else if(!coveredSet.has(idx)){
+            cell = document.createElement("td");
+          }
+          if(cell){ cell.classList.add("edge-r"); tr.appendChild(cell); }
+          return;
+        }
+        lastTd = makeCell(c.key, row, idx, baseDate, limitMinFinal);
+        tr.appendChild(lastTd);
+      });
+      if(!colVis.daySummary && lastTd) lastTd.classList.add("edge-r");
+      tbody.appendChild(tr);
+
+      if(row.type === "GOAL" && overall && idx === rows.length-1){
+        tbody.appendChild(makeOverallSummaryRow(overall, limitMinFinal));
+      }
+    });
+  }
+
+  // ---------------------------------------------------------
+  // グローバル操作
+  // ---------------------------------------------------------
+  document.getElementById("startTime").addEventListener("change", renderTable);
+  document.getElementById("goalLimit").addEventListener("change", renderTable);
+
+  function applyPrintStyle(){
+    let sc = parseFloat(document.getElementById("printScale").value);
+    if(!(sc>0)) sc = 75;
+    sc = Math.min(200, Math.max(30, sc));
+    const ori = document.getElementById("printOrient").value;
+    document.getElementById("printDyn").textContent =
+      "@page{ size: A4 "+ori+"; margin: 8mm; } @media print{ main{ zoom:"+(sc/100)+"; } }";
+  }
+  document.getElementById("printScale").addEventListener("change", applyPrintStyle);
+  document.getElementById("printOrient").addEventListener("change", applyPrintStyle);
+
+  document.getElementById("btnAddBottom").addEventListener("click", ()=>{
+    rows.push(newRow("PC"));
+    renderTable();
+  });
+
+  document.getElementById("btnClear").addEventListener("click", ()=>{
+    if(!confirm("すべての行を削除します。よろしいですか？")) return;
+    rows = [ newRow("START"), newRow("GOAL") ];
+    renderTable();
+  });
+
+  document.getElementById("btnSample").addEventListener("click", ()=>{
+    if(rows.length>2 && !confirm("現在の内容を破棄してサンプルを読み込みます。よろしいですか？")) return;
+    const s = newRow("START"); s.place = "多摩川CC"; s.stay="0:00";
+    const pc1 = newRow("PC"); pc1.place="道の駅甲斐大和"; pc1.segDist=68; pc1.speed=22; pc1.isConbini=true; pc1.stay="0:15";
+    const lunch = newRow("LUNCH"); lunch.stay="0:30";
+    const pc2 = newRow("PC"); pc2.place="セブンイレブン諏訪湖畔店"; pc2.segDist=55; pc2.speed=20; pc2.isConbini=true; pc2.stay="0:15";
+    const hotel = newRow("HOTEL"); hotel.place="ビジネスホテル松本"; hotel.segDist=40; hotel.speed=18; hotel.stay="7:00";
+    const pc3 = newRow("PC"); pc3.place="ローソン塩尻峠店"; pc3.segDist=30; pc3.speed=18; pc3.isConbini=true; pc3.stay="0:15";
+    const dinner = newRow("DINNER"); dinner.stay="0:45";
+    const g = newRow("GOAL"); g.place="多摩川CC"; g.segDist=95; g.speed=20; g.stay="0:00";
+    rows = [s,pc1,lunch,pc2,hotel,pc3,dinner,g];
+    document.getElementById("goalLimit").value = "40:00";
+    renderTable();
+  });
+
+  document.getElementById("btnPrint").addEventListener("click", ()=> window.print());
+
+  document.getElementById("btnExport").addEventListener("click", ()=>{
+    const data = {
+      startTime: document.getElementById("startTime").value,
+      goalLimit: document.getElementById("goalLimit").value,
+      rows: rows.map(r=>({type:r.type, place:r.place, isConbini:r.isConbini, segDist:r.segDist, speed:r.speed, stay:r.stay, arrivalOverride:r.arrivalOverride}))
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "brevet-plan.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("btnImportTrigger").addEventListener("click", ()=>{
+    document.getElementById("importFile").click();
+  });
+  document.getElementById("importFile").addEventListener("change", (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const data = JSON.parse(reader.result);
+        document.getElementById("startTime").value = data.startTime || "";
+        document.getElementById("goalLimit").value = data.goalLimit || "";
+        rows = (data.rows||[]).map(r=>{
+          const nr = newRow(r.type);
+          nr.place = r.place||"";
+          nr.isConbini = !!r.isConbini;
+          nr.segDist = Number(r.segDist)||0;
+          nr.speed = Number(r.speed)||0;
+          nr.stay = r.stay || "0:00";
+          nr.arrivalOverride = (r.arrivalOverride===undefined) ? null : r.arrivalOverride;
+          return nr;
+        });
+        if(rows.length===0) rows = [newRow("START"), newRow("GOAL")];
+        renderTable();
+      }catch(err){
+        alert("JSONの読み込みに失敗しました: " + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  // ---------------------------------------------------------
+  // 初期化
+  // ---------------------------------------------------------
+  (function init(){
+    const now = new Date();
+    now.setMinutes(0,0,0);
+    now.setDate(now.getDate()+7);
+    const pad = n => String(n).padStart(2,"0");
+    document.getElementById("startTime").value =
+      now.getFullYear()+"-"+pad(now.getMonth()+1)+"-"+pad(now.getDate())+"T"+pad(now.getHours())+":"+pad(now.getMinutes());
+    renderColChips();
+    renderSumChips();
+    applyPrintStyle();
+    renderTable();
+  })();
+
+})();
+</script>
+
+</body>
+</html>
