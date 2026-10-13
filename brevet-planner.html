@@ -274,6 +274,19 @@
   .day-cell .day-item .label{ color:var(--ink); }
   .day-cell .day-item .val{ font-weight:700; }
 
+  /* ---- 太め・フォント統一（1日のまとめ欄に合わせる） ---- */
+  .num{ font-family:inherit; font-weight:inherit; font-variant-numeric:tabular-nums; }
+  select, input, button{ font-family:inherit; }
+  tbody td{ font-weight:700; }
+  thead th{ font-weight:700; }
+  select, input[type=number], input.cell-text{ font-weight:700; }
+  .day-cell .day-item .label{ font-weight:700; }
+  .day-cell .day-item .val{ font-weight:800; }
+  .pc-no{ margin-left:6px; font-weight:800; }
+
+  .pv{ display:none; }
+  .hdr-part{ display:inline-block; white-space:nowrap; }
+
   /* ---- 印刷用 ---- */
   *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @media print{
@@ -282,9 +295,11 @@
     header.app-header, .no-print, #validationMsg, footer.hint, th.col-action{ display:none !important; }
     main{ padding:0; max-width:none; margin:0; }
     .table-scroll{ border:none; overflow:visible; background:none; }
-    table{ min-width:0; width:100%; }
-    thead th{ position:static; background:#3b4247; color:#fff; border:1px solid #666; padding:4px 5px; font-size:13px; }
-    tbody td{ border:1px solid #888; padding:3px 6px; font-size:15px; }
+    table{ min-width:0; width:auto; }
+    thead th{ position:static; background:#3b4247; color:#fff; border:1px solid #666; padding:3px 4px; font-size:13px; white-space:normal; width:1px; text-align:center; }
+    tbody td{ border:1px solid #888; padding:2px 5px; font-size:15px; }
+    select, input:not([type=checkbox]){ display:none !important; }
+    .pv{ display:inline; }
     tbody tr{ page-break-inside:avoid; }
     tbody tr:hover{ filter:none; }
     select, input{ border:none !important; background:transparent !important; padding:0 !important; color:#000; font-size:15px; }
@@ -301,13 +316,14 @@
     td[data-col="conbini"]{ width:1%; padding:3px 6px 3px 0 !important; }
     tbody td.day-cell.day-cell{ font-size:14px; padding:4px 8px; border-left:1.5px solid #000; }
     .day-cell .day-title{ font-size:16px; }
-    table{ width:calc(100% - 3px); }
     /* 日の区切り: 前の行の下線と次の行の上線の両方を太い黒線にする（どちらが優先されても黒になる） */
     tbody tr.day-start td{ border-top:4px solid #000; }
     tbody tr.day-end td{ border-bottom:4px solid #000; }
     tbody td.day-cell.day-cell{ border-bottom:4px solid #000; }
     tbody td.pre-sum{ border-right:1.5px solid #000; }
     tbody td.edge-r, thead th.edge-r{ border-right:1.5px solid #000; }
+    select, input{ font-family:inherit; font-weight:700; }
+    .pc-no{ margin-left:1px; }
     .conbini-cell{ justify-content:flex-end; }
     .conbini-no{ background:none; color:#000; font-size:18px; font-weight:700; padding:0; min-width:0; }
     tr.day-summary td{ border-top:1.5px solid #000; border-bottom:1.5px solid #000; padding:4px 8px; }
@@ -355,6 +371,8 @@
         <button class="ghost" id="btnExport">JSON書き出し</button>
         <button class="ghost" id="btnImportTrigger">JSON読み込み</button>
         <input type="file" id="importFile" accept="application/json" style="display:none">
+        <button class="ghost" id="btnXlsx">Excel出力(.xlsx)</button>
+        <button class="ghost" id="btnCsv">CSV出力</button>
         <button class="primary" id="btnPrint">印刷 / PDF保存</button>
       </div>
     </div>
@@ -398,27 +416,27 @@
   // ---------------------------------------------------------
   // 定数
   // ---------------------------------------------------------
-  const TYPES = ["START","PC","BREAKFAST","LUNCH","DINNER","HOTEL","GOAL"];
-  const TYPE_LABEL = {START:"START", PC:"PC", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
-  const TYPE_SHORT = {START:"START", PC:"PC", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
+  const TYPES = ["START","PC","REST","BREAKFAST","LUNCH","DINNER","HOTEL","GOAL"];
+  const TYPE_LABEL = {START:"START", PC:"PC", REST:"休憩", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
+  const TYPE_SHORT = {START:"START", PC:"PC", REST:"休憩", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
   const NO_PLACE = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
   const NO_DIST  = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
-  const IS_TIMED = t => t==="PC" || t==="HOTEL" || t==="GOAL"; // 区間距離/目標時速から所要時間を計算する種別
+  const IS_TIMED = t => t==="PC" || t==="REST" || t==="HOTEL" || t==="GOAL"; // 区間距離/目標時速から所要時間を計算する種別
   const IS_BOUNDARY = t => t==="START" || t==="HOTEL" || t==="GOAL"; // 1日の区切り
 
   const COLS = [
     {key:"conbini",  label:"コンビニ"},
     {key:"type",     label:"種別"},
     {key:"place",    label:"場所"},
-    {key:"cumDist",  label:"累計距離(km)"},
-    {key:"segDist",  label:"区間距離(km)"},
-    {key:"speed",    label:"目標時速(km/h)"},
-    {key:"duration", label:"所要時間"},
-    {key:"arrival",  label:"到着時刻"},
-    {key:"elapsed",  label:"経過時間"},
-    {key:"stay",     label:"滞在時間"},
-    {key:"departure",label:"出発時刻"},
-    {key:"daySummary",label:"1日のまとめ"}
+    {key:"cumDist",  label:"累計距離", parts:["累計","距離"]},
+    {key:"segDist",  label:"区間距離", parts:["区間","距離"]},
+    {key:"speed",    label:"目標時速", parts:["目標","時速"]},
+    {key:"duration", label:"所要時間", parts:["所要","時間"]},
+    {key:"arrival",  label:"到着時刻", parts:["到着","時刻"]},
+    {key:"elapsed",  label:"経過時間", parts:["経過","時間"]},
+    {key:"stay",     label:"滞在時間", parts:["滞在","時間"]},
+    {key:"departure",label:"出発時刻", parts:["出発","時刻"]},
+    {key:"daySummary",label:"1日のまとめ", parts:["1日の","まとめ"]}
   ];
 
   // ---------------------------------------------------------
@@ -493,10 +511,9 @@
   function fmtClock(baseDate, offsetMinutes){
     if(!baseDate || offsetMinutes===null || offsetMinutes===undefined || isNaN(offsetMinutes)) return "-";
     const d = new Date(baseDate.getTime() + offsetMinutes*60000);
-    const w = ["日","月","火","水","木","金","土"][d.getDay()];
     const mm = d.getMonth()+1, dd = d.getDate();
     const hh = String(d.getHours()).padStart(2,"0"), mi = String(d.getMinutes()).padStart(2,"0");
-    return mm + "/" + dd + "(" + w + ") " + hh + ":" + mi;
+    return mm + "/" + dd + " " + hh + ":" + mi;
   }
 
   // ---------------------------------------------------------
@@ -512,6 +529,7 @@
     let cumDist = 0;
     let prevDeparture = 0;
     let conbiniCounter = 0;
+    let pcCounter = 0;
 
     rows.forEach((r,i)=>{
       if(dayStartSet.has(i)) conbiniCounter = 0;
@@ -549,13 +567,16 @@
         cumDist += (Number(r.segDist)||0);
       }
 
+      let pcNo = null;
+      if(r.type === "PC"){ pcCounter++; pcNo = pcCounter; }
+
       let conbiniNo = null;
       if(r.isConbini){
         conbiniCounter++;
         conbiniNo = conbiniCounter;
       }
 
-      r._c = { duration, durationValid, arrival, manual, stayMin, stayInvalid, departure, cumDist, conbiniNo };
+      r._c = { duration, durationValid, arrival, manual, stayMin, stayInvalid, departure, cumDist, conbiniNo, pcNo };
       prevDeparture = departure;
     });
 
@@ -657,7 +678,13 @@
     tr.appendChild(thAction);
     visibleCols().forEach(c=>{
       const th = document.createElement("th");
-      th.textContent = c.label;
+      (c.parts || [c.label]).forEach((part, k)=>{
+        if(k > 0) th.appendChild(document.createElement("wbr"));
+        const sp = document.createElement("span");
+        sp.className = "hdr-part";
+        sp.textContent = part;
+        th.appendChild(sp);
+      });
       th.setAttribute("data-col", c.key);
       tr.appendChild(th);
     });
@@ -699,6 +726,14 @@
 
     [up,down,ins,del].forEach(b=>td.appendChild(b));
     return td;
+  }
+
+  function addPv(td, text){
+    const sp = document.createElement("span");
+    sp.className = "pv";
+    sp.textContent = text;
+    td.appendChild(sp);
+    return sp;
   }
 
   function makeCell(key, row, idx, baseDate, limitMin){
@@ -750,6 +785,13 @@
           renderTable();
         });
         td.appendChild(sel);
+        addPv(td, TYPE_SHORT[row.type]);
+        if(row.type === "PC" && c.pcNo){
+          const no = document.createElement("span");
+          no.className = "pc-no";
+          no.textContent = c.pcNo;
+          td.appendChild(no);
+        }
         break;
       }
 
@@ -763,13 +805,15 @@
           inp.addEventListener("change", ()=>{ row.place = inp.value; });
           inp.addEventListener("keydown", e=>{ if(e.key==="Enter") inp.blur(); });
           td.appendChild(inp);
+          const pv = addPv(td, row.place);
+          inp.addEventListener("input", ()=>{ pv.textContent = inp.value; });
         }
         break;
       }
 
       case "cumDist": {
         const span = document.createElement("span"); span.className="num";
-        span.textContent = fmtDist(c.cumDist) + " km";
+        span.textContent = fmtDist(c.cumDist);
         td.appendChild(span);
         break;
       }
@@ -784,6 +828,7 @@
           inp.disabled = isStart;
           inp.addEventListener("change", ()=>{ row.segDist = parseFloat(inp.value)||0; renderTable(); });
           td.appendChild(inp);
+          addPv(td, isStart ? "0.0" : fmtDist(Number(row.segDist)||0));
         }
         break;
       }
@@ -799,6 +844,7 @@
           if(!c.durationValid){ inp.style.borderColor = "var(--danger)"; inp.title = "目標時速が未設定のため所要時間を計算できません"; }
           inp.addEventListener("change", ()=>{ row.speed = parseFloat(inp.value)||0; renderTable(); });
           td.appendChild(inp);
+          addPv(td, isStart ? "0.0" : fmtSpeed(Number(row.speed)||0));
         }
         break;
       }
@@ -895,6 +941,7 @@
         inp.addEventListener("change", ()=>{ row.stay = inp.value; renderTable(); });
         inp.addEventListener("keydown", e=>{ if(e.key==="Enter") inp.blur(); });
         td.appendChild(inp);
+        addPv(td, noStay ? "" : row.stay);
         break;
       }
 
@@ -920,11 +967,11 @@
 
   function summaryItemsFor(o){
     const vals = {
-      dist:   fmtDist(o.distTotal) + " km",
+      dist:   fmtDist(o.distTotal),
       time:   fmtHM(o.timeTotal),
       travel: fmtHM(o.travelOnly),
-      gross:  o.gross!==null ? o.gross.toFixed(1) + " km/h" : "-",
-      net:    o.net!==null ? o.net.toFixed(1) + " km/h" : "-"
+      gross:  o.gross!==null ? o.gross.toFixed(1) : "-",
+      net:    o.net!==null ? o.net.toFixed(1) : "-"
     };
     return SUMS.filter(x=>sumVis[x.key]).map(x=>[x.label, vals[x.key]]);
   }
@@ -1135,6 +1182,247 @@
   // ---------------------------------------------------------
   // 初期化
   // ---------------------------------------------------------
+
+  // ---------------------------------------------------------
+  // Excel / CSV 出力
+  // ---------------------------------------------------------
+  const PAL = {
+    odd:  {hd:"F4D6B4", body:"FFF8EF", mid:"FDEBD3", meal:"F3B04F", hotel:"EE8A70"},
+    even: {hd:"CDE2EE", body:"F1F8FC", mid:"DCECF6", meal:"6FC4B8", hotel:"8F9FE6"}
+  };
+  const COL_W = {conbini:8, type:9, place:22, cumDist:10, segDist:10, speed:9, duration:9,
+                 arrival:13, elapsed:9, stay:8, departure:13};
+
+  function cellS(v, fill, al){ return {t:"s", v:String(v), fill:fill, al:al||"center"}; }
+  function cellN(v, fill){ return {t:"n", v:v, fill:fill, al:"center", fmt:true}; }
+
+  function buildExport(){
+    const { days, overall } = computeAll();
+    const baseDate = getStartDate();
+    const cols = visibleCols().filter(c=>c.key!=="daySummary");
+    const sumItems = colVis.daySummary ? SUMS.filter(x=>sumVis[x.key]) : [];
+    const firstOfDay = new Map();
+    days.forEach((d,i)=>{ firstOfDay.set(i===0 ? 0 : d.startIdx+1, {d,i}); });
+
+    const header = ["日"].concat(cols.map(c=>c.label), sumItems.map(x=>x.label));
+    const widths = [6].concat(cols.map(c=>COL_W[c.key]||10), sumItems.map(()=>14));
+
+    function sumCell(o, key, fill){
+      if(key==="dist")   return cellN(Math.round(o.distTotal*10)/10, fill);
+      if(key==="time")   return cellS(fmtHM(o.timeTotal), fill);
+      if(key==="travel") return cellS(fmtHM(o.travelOnly), fill);
+      if(key==="gross")  return o.gross!==null ? cellN(Math.round(o.gross*10)/10, fill) : cellS("-", fill);
+      return o.net!==null ? cellN(Math.round(o.net*10)/10, fill) : cellS("-", fill);
+    }
+
+    const body = [];
+    rows.forEach((row, idx)=>{
+      const c = row._c;
+      const pal = PAL[c.dayIdx%2===0 ? "odd" : "even"];
+      const isMeal = NO_PLACE(row.type);
+      const isHotel = row.type === "HOTEL";
+      const isStart = row.type === "START";
+      const noStay = (row.type==="START" || row.type==="GOAL");
+      const hdFill = isMeal ? pal.meal : (isHotel ? pal.hotel : pal.hd);
+      const bodyFill = (isMeal || isHotel) ? pal.mid : pal.body;
+
+      const cells = [ cellN(c.dayIdx+1, pal.hd) ];
+      cells[0].fmt = false;
+      cols.forEach(col=>{
+        switch(col.key){
+          case "conbini":  cells.push(c.conbiniNo ? Object.assign(cellN(c.conbiniNo, hdFill), {fmt:false}) : cellS("", hdFill)); break;
+          case "type":     cells.push(cellS(TYPE_SHORT[row.type] + (c.pcNo || ""), hdFill)); break;
+          case "place":    cells.push(cellS(isMeal ? "" : row.place, hdFill, "left")); break;
+          case "cumDist":  cells.push(cellN(Math.round(c.cumDist*10)/10, bodyFill)); break;
+          case "segDist":  cells.push(isMeal ? cellS("", bodyFill) : cellN(isStart ? 0 : (Number(row.segDist)||0), bodyFill)); break;
+          case "speed":    cells.push(isMeal ? cellS("", bodyFill) : cellN(isStart ? 0 : (Number(row.speed)||0), bodyFill)); break;
+          case "duration": cells.push(cellS(IS_TIMED(row.type) ? fmtHM(c.duration) : "", bodyFill)); break;
+          case "arrival":  cells.push(cellS(fmtClock(baseDate, c.arrival), bodyFill)); break;
+          case "elapsed":  cells.push(cellS(fmtHM(c.arrival), bodyFill)); break;
+          case "stay":     cells.push(cellS(noStay ? "" : fmtHM(c.stayMin), bodyFill)); break;
+          case "departure":cells.push(cellS(fmtClock(baseDate, c.departure), bodyFill)); break;
+        }
+      });
+      const info = firstOfDay.get(idx);
+      sumItems.forEach(x=>{
+        cells.push(info ? sumCell(info.d, x.key, pal.hd) : cellS("", pal.hd));
+      });
+      body.push({cells:cells, thick: !!(info && info.i > 0)});
+    });
+
+    if(overall){
+      const g = "D9DCDE";
+      const cells = [ cellS("合計", g) ];
+      cols.forEach(()=> cells.push(cellS("", g)));
+      sumItems.forEach(x=> cells.push(sumCell(overall, x.key, g)));
+      body.push({cells:cells, thick:true});
+    }
+    return { header, widths, body };
+  }
+
+  function downloadBlob(blob, name){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportCsv(){
+    const { header, body } = buildExport();
+    const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const lines = [ header.map(q).join(",") ];
+    body.forEach(r=>{
+      lines.push(r.cells.map(c=> q(c.t==="n" ? (c.fmt ? c.v.toFixed(1) : c.v) : c.v)).join(","));
+    });
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
+    downloadBlob(blob, "brevet-plan.csv");
+  }
+
+  // ---- 最小構成のxlsx生成（ライブラリ不使用） ----
+  function xmlEsc(t){
+    return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+  function colLetter(i){
+    let s = ""; i++;
+    while(i > 0){ const m = (i-1) % 26; s = String.fromCharCode(65+m) + s; i = Math.floor((i-1)/26); }
+    return s;
+  }
+  function crc32(u8){
+    if(!crc32.t){
+      crc32.t = [];
+      for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); crc32.t[n] = c>>>0; }
+    }
+    let c = 0xFFFFFFFF;
+    for(let i=0;i<u8.length;i++) c = crc32.t[(c ^ u8[i]) & 0xFF] ^ (c>>>8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function makeZip(files){
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let offset = 0;
+    files.forEach(f=>{
+      const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true);
+      lh.setUint16(8,0,true); lh.setUint16(10,0,true); lh.setUint16(12,33,true);
+      lh.setUint32(14,crc,true); lh.setUint32(18,data.length,true); lh.setUint32(22,data.length,true);
+      lh.setUint16(26,name.length,true); lh.setUint16(28,0,true);
+      parts.push(new Uint8Array(lh.buffer), name, data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0x0800,true);
+      ch.setUint16(10,0,true); ch.setUint16(12,0,true); ch.setUint16(14,33,true);
+      ch.setUint32(16,crc,true); ch.setUint32(20,data.length,true); ch.setUint32(24,data.length,true);
+      ch.setUint16(28,name.length,true); ch.setUint16(30,0,true); ch.setUint16(32,0,true);
+      ch.setUint16(34,0,true); ch.setUint16(36,0,true); ch.setUint32(38,0,true); ch.setUint32(42,offset,true);
+      central.push(new Uint8Array(ch.buffer), name);
+      offset += 30 + name.length + data.length;
+    });
+    let csize = 0; central.forEach(b=> csize += b.length);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0,0x06054b50,true); e.setUint16(4,0,true); e.setUint16(6,0,true);
+    e.setUint16(8,files.length,true); e.setUint16(10,files.length,true);
+    e.setUint32(12,csize,true); e.setUint32(16,offset,true); e.setUint16(20,0,true);
+    return new Blob(parts.concat(central, [new Uint8Array(e.buffer)]),
+      {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  }
+
+  function exportXlsx(){
+    const { header, widths, body } = buildExport();
+    const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+    const HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+
+    const fillIds = {};
+    const fillXml = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'];
+    function fillId(hex){
+      if(!(hex in fillIds)){
+        fillIds[hex] = fillXml.length;
+        fillXml.push('<fill><patternFill patternType="solid"><fgColor rgb="FF'+hex+'"/><bgColor indexed="64"/></patternFill></fill>');
+      }
+      return fillIds[hex];
+    }
+    const xfIds = {}, xfXml = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'];
+    function xfId(fill, font, fmt, border, al){
+      const key = [fill,font,fmt,border,al].join("|");
+      if(!(key in xfIds)){
+        xfIds[key] = xfXml.length;
+        xfXml.push('<xf numFmtId="'+(fmt?164:0)+'" fontId="'+font+'" fillId="'+fillId(fill)+'" borderId="'+border+
+          '" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'+
+          '<alignment horizontal="'+al+'" vertical="center" wrapText="1"/></xf>');
+      }
+      return xfIds[key];
+    }
+
+    function cellXml(ref, c, style){
+      if(c.t==="n") return '<c r="'+ref+'" s="'+style+'"><v>'+c.v+'</v></c>';
+      if(c.v==="") return '<c r="'+ref+'" s="'+style+'"/>';
+      return '<c r="'+ref+'" s="'+style+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(c.v)+'</t></is></c>';
+    }
+
+    let sheetRows = '<row r="1" ht="32" customHeight="1">';
+    header.forEach((h,i)=>{
+      sheetRows += cellXml(colLetter(i)+"1", {t:"s", v:h}, xfId("3B4247", 2, false, 1, "center"));
+    });
+    sheetRows += '</row>';
+    body.forEach((r,ri)=>{
+      const rn = ri + 2;
+      sheetRows += '<row r="'+rn+'" ht="21" customHeight="1">';
+      r.cells.forEach((c,ci)=>{
+        const style = xfId(c.fill, 1, !!(c.t==="n" && c.fmt), r.thick ? 2 : 1, c.al);
+        sheetRows += cellXml(colLetter(ci)+rn, c, style);
+      });
+      sheetRows += '</row>';
+    });
+
+    let colsXml = '<cols>';
+    widths.forEach((w,i)=>{ colsXml += '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>'; });
+    colsXml += '</cols>';
+
+    const sheet = HEAD + '<worksheet '+NS+'><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'+
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+
+      '<sheetFormatPr defaultRowHeight="18"/>'+colsXml+'<sheetData>'+sheetRows+'</sheetData>'+
+      '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'+
+      '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+
+    const thin = (tag, col) => '<'+tag+' style="thin"><color rgb="FF'+col+'"/></'+tag+'>';
+    const border1 = '<border>'+thin("left","888888")+thin("right","888888")+thin("top","888888")+thin("bottom","888888")+'<diagonal/></border>';
+    const border2 = '<border>'+thin("left","888888")+thin("right","888888")+'<top style="medium"><color rgb="FF000000"/></top>'+thin("bottom","888888")+'<diagonal/></border>';
+    const FONT = '<name val="Yu Gothic"/>';
+    const styles = HEAD + '<styleSheet '+NS+'>'+
+      '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts>'+
+      '<fonts count="3"><font><sz val="11"/>'+FONT+'</font><font><b/><sz val="11"/>'+FONT+'</font>'+
+      '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/>'+FONT+'</font></fonts>'+
+      '<fills count="'+fillXml.length+'">'+fillXml.join("")+'</fills>'+
+      '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>'+border1+border2+'</borders>'+
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+      '<cellXfs count="'+xfXml.length+'">'+xfXml.join("")+'</cellXfs>'+
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+    const files = [
+      {name:"[Content_Types].xml", text: HEAD+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+        '<Default Extension="xml" ContentType="application/xml"/>'+
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'+
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+      {name:"_rels/.rels", text: HEAD+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+      {name:"xl/workbook.xml", text: HEAD+'<workbook '+NS+' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+        '<sheets><sheet name="行程計画" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+      {name:"xl/_rels/workbook.xml.rels", text: HEAD+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'+
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+      {name:"xl/styles.xml", text: styles},
+      {name:"xl/worksheets/sheet1.xml", text: sheet}
+    ];
+    downloadBlob(makeZip(files), "brevet-plan.xlsx");
+  }
+
+  document.getElementById("btnXlsx").addEventListener("click", exportXlsx);
+  document.getElementById("btnCsv").addEventListener("click", exportCsv);
+
   (function init(){
     const now = new Date();
     now.setMinutes(0,0,0);
