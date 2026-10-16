@@ -419,9 +419,8 @@
   const TYPES = ["START","PC","REST","BREAKFAST","LUNCH","DINNER","HOTEL","GOAL"];
   const TYPE_LABEL = {START:"START", PC:"PC", REST:"休憩", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
   const TYPE_SHORT = {START:"START", PC:"PC", REST:"休憩", BREAKFAST:"朝食", LUNCH:"昼食", DINNER:"夕食", HOTEL:"ホテル", GOAL:"GOAL"};
-  const NO_PLACE = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
-  const NO_DIST  = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
-  const IS_TIMED = t => t==="PC" || t==="REST" || t==="HOTEL" || t==="GOAL"; // 区間距離/目標時速から所要時間を計算する種別
+  const IS_MEAL  = t => t==="BREAKFAST" || t==="LUNCH" || t==="DINNER";
+  const IS_TIMED = t => t !== "START"; // 区間距離/目標時速から所要時間を計算する種別
   const IS_BOUNDARY = t => t==="START" || t==="HOTEL" || t==="GOAL"; // 1日の区切り
 
   const COLS = [
@@ -563,9 +562,7 @@
 
       const departure = arrival + stayMin;
 
-      if(!NO_DIST(r.type)){
-        cumDist += (Number(r.segDist)||0);
-      }
+      cumDist += (Number(r.segDist)||0);
 
       let pcNo = null;
       if(r.type === "PC"){ pcCounter++; pcNo = pcCounter; }
@@ -740,7 +737,6 @@
     const td = document.createElement("td");
     td.setAttribute("data-col", key);
     const c = row._c;
-    const meal = NO_PLACE(row.type);
     const isStart = row.type === "START";
 
     switch(key){
@@ -774,7 +770,6 @@
         });
         sel.addEventListener("change", ()=>{
           row.type = sel.value;
-          if(NO_PLACE(row.type)) row.place = "";
           if(row.type==="START"){ row.segDist = 0; row.speed = 0; }
           else if(!(row.speed>0)) row.speed = 20;
           if(row.type==="HOTEL"){
@@ -796,9 +791,7 @@
       }
 
       case "place": {
-        if(meal){
-          // 食事の場合は何も表示しない
-        } else {
+        {
           const inp = document.createElement("input");
           inp.type = "text"; inp.className = "cell-text place-input";
           inp.value = row.place;
@@ -812,16 +805,23 @@
       }
 
       case "cumDist": {
-        const span = document.createElement("span"); span.className="num";
-        span.textContent = fmtDist(c.cumDist);
-        td.appendChild(span);
+        const inp = document.createElement("input");
+        inp.type = "number"; inp.step = "0.1"; inp.min = "0";
+        inp.value = c.cumDist.toFixed(1);
+        inp.disabled = isStart;
+        inp.addEventListener("change", ()=>{
+          const v = parseFloat(inp.value);
+          const prev = idx > 0 ? rows[idx-1]._c.cumDist : 0;
+          if(!isNaN(v)) row.segDist = Math.max(0, Math.round((v - prev) * 10) / 10);
+          renderTable();
+        });
+        td.appendChild(inp);
+        addPv(td, fmtDist(c.cumDist));
         break;
       }
 
       case "segDist": {
-        if(meal){
-          td.textContent = "-";
-        } else {
+        {
           const inp = document.createElement("input");
           inp.type = "number"; inp.step = "0.1"; inp.min="0";
           inp.value = row.segDist;
@@ -834,9 +834,7 @@
       }
 
       case "speed": {
-        if(meal){
-          td.textContent = "-";
-        } else {
+        {
           const inp = document.createElement("input");
           inp.type = "number"; inp.step="0.1"; inp.min="0";
           inp.value = row.speed;
@@ -1219,7 +1217,7 @@
     rows.forEach((row, idx)=>{
       const c = row._c;
       const pal = PAL[c.dayIdx%2===0 ? "odd" : "even"];
-      const isMeal = NO_PLACE(row.type);
+      const isMeal = IS_MEAL(row.type);
       const isHotel = row.type === "HOTEL";
       const isStart = row.type === "START";
       const noStay = (row.type==="START" || row.type==="GOAL");
@@ -1232,10 +1230,10 @@
         switch(col.key){
           case "conbini":  cells.push(c.conbiniNo ? Object.assign(cellN(c.conbiniNo, hdFill), {fmt:false}) : cellS("", hdFill)); break;
           case "type":     cells.push(cellS(TYPE_SHORT[row.type] + (c.pcNo || ""), hdFill)); break;
-          case "place":    cells.push(cellS(isMeal ? "" : row.place, hdFill, "left")); break;
+          case "place":    cells.push(cellS(row.place, hdFill, "left")); break;
           case "cumDist":  cells.push(cellN(Math.round(c.cumDist*10)/10, bodyFill)); break;
-          case "segDist":  cells.push(isMeal ? cellS("", bodyFill) : cellN(isStart ? 0 : (Number(row.segDist)||0), bodyFill)); break;
-          case "speed":    cells.push(isMeal ? cellS("", bodyFill) : cellN(isStart ? 0 : (Number(row.speed)||0), bodyFill)); break;
+          case "segDist":  cells.push(cellN(isStart ? 0 : (Number(row.segDist)||0), bodyFill)); break;
+          case "speed":    cells.push(cellN(isStart ? 0 : (Number(row.speed)||0), bodyFill)); break;
           case "duration": cells.push(cellS(IS_TIMED(row.type) ? fmtHM(c.duration) : "", bodyFill)); break;
           case "arrival":  cells.push(cellS(fmtClock(baseDate, c.arrival), bodyFill)); break;
           case "elapsed":  cells.push(cellS(fmtHM(c.arrival), bodyFill)); break;
